@@ -4,6 +4,8 @@
 
 Klient: **Peťo Švikruha (drive.sk)** · Stack: **Python 3.11 + discord.py 2.4 + Supabase + WhatsApp Cloud API**
 
+> **Nový tu?** Začni s [`SETUP.md`](SETUP.md) — click-by-click runbook od prázdneho stroja po beziaceho bota.
+
 ---
 
 ## TL;DR

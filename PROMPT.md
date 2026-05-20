@@ -51,7 +51,7 @@ Sesterský projekt: **synapse-cpc-bot-v2** (CarProfitClub Discord bot) — rovna
 
 ### ⚠️ TODO (zostávajúce)
 
-1. **Manuálne otestovať full flow** na test Discord serveri (Janči pripraví test guild). Plán fáz 0→3 viď `~/.claude/plans/re-taj-prompt-md-*.md` (Fáza 0 lokálne prostredie už hotová: 66 testov ✅, importy ✅). Zostávajú Fázy 1-3: setup Discord/Supabase/WhatsApp credentials → spustenie bota → E2E checklist.
+1. **Manuálne otestovať full flow** na test Discord serveri. Click-by-click runbook v **[`SETUP.md`](SETUP.md)** — prejdi sekcie 0→7. Fáza 0 (lokálne prostredie) je hotová (66 testov ✅, importy ✅); zostáva nasetupovať Discord/Supabase/WhatsApp credentials a prejsť E2E checklist v sekcii 5 (5a–5g).
 2. **WhatsApp template aprooval** — Meta to musí schváliť, deploy nemôže produkčne fungovať bez schválenia (viď README sekcia 3c). Manuálna úloha pre Janči-ho, žiadny kód.
 
 ---
