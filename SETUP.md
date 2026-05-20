@@ -130,6 +130,32 @@ pip install -r requirements.txt
 ```
 Musí vypísať `OK`. Ak `ValidationError`, prečítaj chybové hlásenie a doplň chýbajúce vars.
 
+### 4d. Pre-flight (over všetky externé creds naraz)
+
+```powershell
+.venv\Scripts\python -m scripts.preflight
+```
+
+Skript za ~3 s overí Discord token, Supabase REST + schema, a WhatsApp API
+**bez** spustenia bota. Očakávaný výstup:
+
+```
+🔍 Preflight — synapse-drive-bot
+
+  ✅ Discord    bot @synapse-drive-test (id 1234...)
+  ✅ Supabase   leads table reachable
+  ✅ WhatsApp   phone +1 555 123 4567, verified_name 'Drive Test'
+
+  ─────────────────────────────────────────
+  ✓ 3/3 PASS — môžeš spustiť: .venv\Scripts\python -m src.bot
+```
+
+- [ ] **3/3 PASS** pred ďalšou sekciou
+
+Ak je niečo `❌`, skript ti rovno povie fix (token expired → kde regenerovať,
+service_role vs anon, missing schema → ktorý SQL spustiť atď.). Ušetrí 10 min
+debugovania pri prvom štarte bota.
+
 ---
 
 ## 5. Smoke test + E2E checklist
@@ -200,6 +226,9 @@ Ak chceš spustiť aj web admin (`synapse-drive-admin`):
 ---
 
 ## 7. Po-runtime + problémy
+
+**Ak `bot.ready` nepríde alebo niečo zlyhá**, najprv vždy pusti
+`scripts/preflight.py` (sekcia 4d) — odhalí 90 % credential chýb sám.
 
 Pre známe problémy viď [`README.md → Troubleshooting`](README.md#troubleshooting), špecificky:
 
