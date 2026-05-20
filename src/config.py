@@ -21,13 +21,7 @@ class Settings(BaseSettings):
     # ---- Discord ----
     discord_token: str = Field(..., min_length=20)
     discord_guild_id: int
-    discord_leads_channel_id: int
-    discord_kristian_user_id: int
-    discord_admin_role_id: int
-
-    # ---- Supabase ----
-    supabase_url: str
-    supabase_service_key: str
+    discord_leasing_channel_id: int | None = None
 
     # ---- WhatsApp Cloud API ----
     whatsapp_phone_number_id: str
@@ -40,13 +34,6 @@ class Settings(BaseSettings):
     # ---- App ----
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     environment: Literal["development", "production"] = "production"
-    car_parser_timeout: int = 10
-
-    # ---- Provízie ----
-    # Placeholder pravidlo (% z car_price) kým Peter nedodá reálne pravidlá.
-    # Mení sa jediným edit-om: src/services/commission.py:compute_commission.
-    commission_default_rate: float = 0.03  # 3 %
-    commission_fallback_amount: float = 0.0  # ak car_price chýba
 
     @property
     def whatsapp_api_url(self) -> str:

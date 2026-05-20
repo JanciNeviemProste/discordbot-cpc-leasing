@@ -13,16 +13,14 @@ from discord.ext import commands
 from src.config import get_settings
 from src.services.whatsapp import WhatsAppClient
 from src.utils.logger import get_logger, setup_logging
-from src.views.lead_view import LeadStatusView
 
 
 class SynapseDriveBot(commands.Bot):
-    """Custom bot s lifecycle hookmi pre WhatsApp + persistent views."""
+    """Custom bot s lifecycle hookmi pre WhatsApp client."""
 
     def __init__(self) -> None:
         intents = discord.Intents.default()
         intents.message_content = False  # nepoužívame text commands, len slash
-        intents.members = True            # potrebné pre role check
 
         super().__init__(
             command_prefix="!",  # nepoužité, ale required
@@ -41,13 +39,8 @@ class SynapseDriveBot(commands.Bot):
         # WhatsApp client init
         self.whatsapp_client = WhatsAppClient()
 
-        # Persistent view registration (aby buttony fungovali aj po reštarte)
-        # Použijeme placeholder UUID — Discord matchuje len prefix "lead:status:*:"
-        self.add_view(LeadStatusView())
-
         # Cogs
         await self.load_extension("src.cogs.leads")
-        await self.load_extension("src.cogs.reports")
 
         # Sync slash commands na guild (rýchle, na rozdiel od global)
         guild = discord.Object(id=self.settings.discord_guild_id)

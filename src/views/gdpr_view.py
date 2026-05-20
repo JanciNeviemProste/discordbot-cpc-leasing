@@ -40,6 +40,6 @@ class GDPRConsentView(discord.ui.View):
         button: discord.ui.Button,
     ) -> None:
         await interaction.response.edit_message(
-            content="❌ Zrušené. Pre nový lead použi `/novy-zaujemca` znova.",
+            content="❌ Zrušené. Pre novú žiadosť použi `/leasing` znova.",
             view=None,
         )

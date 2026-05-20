@@ -9,7 +9,6 @@ import pytest
 
 from scripts.preflight import (
     check_discord,
-    check_supabase,
     check_whatsapp,
 )
 
@@ -61,47 +60,6 @@ async def test_discord_network_error_fails_cleanly() -> None:
         r = await check_discord("token")
     assert not r.passed
     assert "network" in r.detail.lower()
-
-
-# ============================================================
-# Supabase
-# ============================================================
-@pytest.mark.asyncio
-async def test_supabase_200_passes() -> None:
-    with _patch_get(_resp(200, "[]")):
-        r = await check_supabase("https://x.supabase.co", "service_key")
-    assert r.passed
-    assert "reachable" in r.detail
-
-
-@pytest.mark.asyncio
-async def test_supabase_401_hints_at_anon_vs_service_role() -> None:
-    with _patch_get(_resp(401)):
-        r = await check_supabase("https://x.supabase.co", "anon_by_mistake")
-    assert not r.passed
-    assert r.fix_hint and "service_role" in r.fix_hint
-
-
-@pytest.mark.asyncio
-async def test_supabase_42p01_table_missing_hints_at_schema_sql() -> None:
-    with _patch_get(_resp(404, '{"code":"42P01","message":"relation does not exist"}')):
-        r = await check_supabase("https://x.supabase.co", "key")
-    assert not r.passed
-    assert r.fix_hint and "schema.sql" in r.fix_hint
-
-
-@pytest.mark.asyncio
-async def test_supabase_trailing_slash_in_url_is_handled() -> None:
-    # Common chyba: user skopíruje URL s '/'. Nesmie to spôsobiť '//rest/v1'
-    captured_url: list[str] = []
-
-    async def fake_get(self: Any, url: str, **kwargs: Any) -> httpx.Response:
-        captured_url.append(url)
-        return _resp(200, "[]")
-
-    with patch.object(httpx.AsyncClient, "get", new=fake_get):
-        await check_supabase("https://x.supabase.co/", "key")
-    assert captured_url[0] == "https://x.supabase.co/rest/v1/leads?limit=1"
 
 
 # ============================================================

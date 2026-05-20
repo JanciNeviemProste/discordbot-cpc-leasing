@@ -1,4 +1,4 @@
-"""Unit testy validátorov a GDPR maskovania."""
+"""Unit testy validátorov."""
 from __future__ import annotations
 
 import pytest
@@ -9,12 +9,8 @@ from src.services.validators import (
     is_valid_vin,
     normalize_phone,
 )
-from src.utils.gdpr import mask_email, mask_name, mask_phone
 
 
-# ============================================================
-# Validators
-# ============================================================
 @pytest.mark.parametrize("phone", [
     "+421 905 123 456",
     "+421905123456",
@@ -57,27 +53,3 @@ def test_vin_validation() -> None:
     assert is_valid_vin("WAUZZZ8K1AA000001")
     assert not is_valid_vin("WAUIO8K1AA000001")  # contains I, O
     assert not is_valid_vin("TOO_SHORT")
-
-
-# ============================================================
-# GDPR masking
-# ============================================================
-def test_mask_phone_keeps_prefix_and_last3() -> None:
-    masked = mask_phone("+421905123456")
-    assert masked.startswith("+421")
-    assert masked.endswith("456")
-    assert "905" not in masked  # middle masked
-
-
-def test_mask_email_preserves_domain() -> None:
-    assert mask_email("jan.novak@gmail.com") == "j********@gmail.com"
-
-
-def test_mask_email_short_local() -> None:
-    assert mask_email("a@gmail.com") == "a@gmail.com"
-
-
-def test_mask_name() -> None:
-    assert mask_name("Ján Novák") == "Ján N."
-    assert mask_name("Ján Karol Novák") == "Ján N."
-    assert mask_name("Ján") == "Ján"

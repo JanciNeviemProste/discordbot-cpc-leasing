@@ -3,12 +3,11 @@
 Spustenie:
     .venv\\Scripts\\python -m scripts.preflight
 
-Overí 3 externé creds bez spustenia bota:
+Overí 2 externé creds bez spustenia bota:
 - Discord bot token  (GET /users/@me)
-- Supabase REST + schema  (GET /rest/v1/leads?limit=1)
 - WhatsApp Cloud API  (GET /{phone_number_id})
 
-Plus lokálne sanity checky (recipient number format, commission rate range).
+Plus lokálne sanity checky (recipient number format).
 
 Exit 0 ak všetky network checky PASS; 1 inak.
 """
@@ -74,45 +73,6 @@ async def check_discord(token: str) -> CheckResult:
     )
 
 
-async def check_supabase(url: str, service_key: str) -> CheckResult:
-    base = url.rstrip("/")
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"{base}/rest/v1/leads?limit=1",
-                headers={
-                    "apikey": service_key,
-                    "Authorization": f"Bearer {service_key}",
-                },
-            )
-    except httpx.HTTPError as e:
-        return CheckResult(
-            "Supabase", False, f"network error: {e.__class__.__name__}",
-            f"Supabase URL {base} neodpovedá — over v Project Settings → API",
-        )
-
-    body_snippet = resp.text[:300] if resp.text else ""
-
-    if resp.status_code == 200:
-        return CheckResult("Supabase", True, "leads table reachable")
-    if resp.status_code == 401:
-        return CheckResult(
-            "Supabase", False, "401 Unauthorized",
-            "service_role key nesprávny (POZOR: NIE anon key). "
-            "Supabase → Project Settings → API → service_role",
-        )
-    if "42P01" in body_snippet or "does not exist" in body_snippet.lower():
-        return CheckResult(
-            "Supabase", False, "table 'leads' neexistuje",
-            "Spusti v Supabase SQL Editori: supabase/schema.sql + "
-            "migrations/00{1,2,3}_*.sql v poradí",
-        )
-    return CheckResult(
-        "Supabase", False, f"HTTP {resp.status_code}",
-        f"response: {body_snippet}",
-    )
-
-
 async def check_whatsapp(phone_number_id: str, access_token: str, api_version: str) -> CheckResult:
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -172,15 +132,6 @@ def _local_sanity_checks(settings) -> list[CheckResult]:  # type: ignore[no-unty
             "Bez '+', len číslice, 10-15 znakov. Príklad: 421905111222",
         ))
 
-    # Commission rate sanity
-    rate = settings.commission_default_rate
-    if not (0.0 <= rate <= 1.0):
-        results.append(CheckResult(
-            "COMMISSION_DEFAULT_RATE", False,
-            f"hodnota {rate} mimo rangu 0..1",
-            "Použi desatinné číslo: 0.03 = 3 %",
-        ))
-
     return results
 
 
@@ -216,7 +167,6 @@ async def _amain() -> int:
     # Network checky — paralelne
     results = await asyncio.gather(
         check_discord(settings.discord_token),
-        check_supabase(settings.supabase_url, settings.supabase_service_key),
         check_whatsapp(
             settings.whatsapp_phone_number_id,
             settings.whatsapp_access_token,
@@ -230,12 +180,12 @@ async def _amain() -> int:
     local_fail = sum(1 for r in local_results if not r.passed)
 
     print(f"\n  {DIM}─────────────────────────────────────────{RESET}")
-    if network_pass == 3 and local_fail == 0:
-        print(f"  {GREEN}{BOLD}✓ {network_pass}/3 PASS{RESET} — môžeš spustiť: "
+    if network_pass == 2 and local_fail == 0:
+        print(f"  {GREEN}{BOLD}✓ {network_pass}/2 PASS{RESET} — môžeš spustiť: "
               f"{BOLD}.venv\\Scripts\\python -m src.bot{RESET}\n")
         return 0
     else:
-        msg = f"{network_pass}/3 network PASS"
+        msg = f"{network_pass}/2 network PASS"
         if local_fail:
             msg += f", {local_fail} lokálnych chýb"
         print(f"  {YELLOW}{BOLD}{msg}{RESET} — oprav vyššie a spusti znova\n")

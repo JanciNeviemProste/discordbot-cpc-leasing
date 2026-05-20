@@ -8,21 +8,20 @@ Template setup (raz, v Meta Business Manager → WhatsApp Manager → Templates)
 - Category: UTILITY  (transactional, schvaľuje sa rýchlo)
 - Language: Slovak (sk)
 - Body:
-    🚗 *Nový lead — drive.sk*
+    🚗 *Nová žiadosť o leasing — drive.sk*
 
     Klient: {{1}}
     Telefón: {{2}}
     Auto: {{3}}
     Flipper: {{4}}
-
-    Otvor v Discorde: {{5}}
+    Poznámka: {{5}}
 
 Parametre v poradí:
-1. masked client name
-2. phone (un-masked — Kristián potrebuje volať)
-3. car description (značka model rok)
-4. flipper meno
-5. Discord message link
+1. meno klienta
+2. telefón klienta
+3. auto (link alebo popis ako zadal flipper)
+4. meno flippera
+5. poznámka z formulára (alebo "-")
 """
 from __future__ import annotations
 
@@ -68,20 +67,20 @@ class WhatsAppClient:
         client_phone: str,
         car_description: str,
         flipper_name: str,
-        discord_message_url: str,
+        note: str,
     ) -> WhatsAppResult:
-        """Pošli template notifikáciu o novom leade."""
+        """Pošli template notifikáciu o novej žiadosti o leasing.
 
-        # Meta nepovoľuje URL s parametermi v body texte template-u —
-        # button URL je v poriadku, ale my použijeme URL ako text parameter.
-        # Niektoré znaky (newline, tab, > 4 medzery za sebou) sú zakázané v
-        # template parametroch → sanitize.
+        Mapuje na template `novy_lead` params: client_name, client_phone,
+        car_description, flipper_name, note. Niektoré znaky (newline, tab,
+        > 4 medzery za sebou) sú zakázané v template parametroch → sanitize.
+        """
         params = [
             _sanitize(client_name),
             _sanitize(client_phone),
             _sanitize(car_description),
             _sanitize(flipper_name),
-            _sanitize(discord_message_url),
+            _sanitize(note),
         ]
 
         payload = {
