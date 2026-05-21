@@ -5,9 +5,9 @@ Spustenie:
 
 Overí 2 externé creds bez spustenia bota:
 - Discord bot token  (GET /users/@me)
-- WhatsApp Cloud API  (GET /{phone_number_id})
+- Telegram Bot API   (GET /getMe + GET /getChat)
 
-Plus lokálne sanity checky (recipient number format).
+Plus lokálne sanity checky (chat_id format).
 
 Exit 0 ak všetky network checky PASS; 1 inak.
 """
@@ -73,49 +73,76 @@ async def check_discord(token: str) -> CheckResult:
     )
 
 
-async def check_whatsapp(phone_number_id: str, access_token: str, api_version: str) -> CheckResult:
+async def check_telegram(bot_token: str, chat_id: str) -> CheckResult:
+    """getMe overí token, getChat overí že bot vie poslať do chat_id."""
+    base = f"https://api.telegram.org/bot{bot_token}"
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"https://graph.facebook.com/{api_version}/{phone_number_id}",
-                params={"fields": "display_phone_number,verified_name"},
-                headers={"Authorization": f"Bearer {access_token}"},
-            )
+            me = await client.get(f"{base}/getMe")
     except httpx.HTTPError as e:
         return CheckResult(
-            "WhatsApp", False, f"network error: {e.__class__.__name__}",
-            "graph.facebook.com nedostupné",
+            "Telegram", False, f"network error: {e.__class__.__name__}",
+            "api.telegram.org nedostupné",
         )
 
-    if resp.status_code == 200:
-        data = resp.json()
+    if me.status_code == 401 or me.status_code == 404:
         return CheckResult(
-            "WhatsApp", True,
-            f"phone {data.get('display_phone_number', '?')}, "
-            f"verified_name '{data.get('verified_name', '?')}'",
+            "Telegram", False, f"getMe HTTP {me.status_code}",
+            "Token invalid. BotFather (@BotFather v Telegrame) → /token na regeneráciu",
         )
 
-    body = resp.text[:300] if resp.text else ""
+    try:
+        me_data = me.json()
+    except ValueError:
+        me_data = {}
 
-    if resp.status_code == 401:
+    if me.status_code != 200 or not me_data.get("ok", False):
         return CheckResult(
-            "WhatsApp", False, "401 Unauthorized",
-            "Access token expiroval (Meta temp tokens žijú 24h) alebo invalid. "
-            "developers.facebook.com → App → WhatsApp → API Setup",
+            "Telegram", False, f"getMe HTTP {me.status_code}",
+            f"response: {me.text[:200]}",
         )
-    if "OAuthException" in body or "code\":190" in body:
+
+    bot_username = me_data.get("result", {}).get("username", "?")
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            chat = await client.get(f"{base}/getChat", params={"chat_id": chat_id})
+    except httpx.HTTPError as e:
         return CheckResult(
-            "WhatsApp", False, "OAuth error",
-            f"token issue: {body}",
+            "Telegram", False, f"getChat network error: {e.__class__.__name__}",
+            "api.telegram.org nedostupné počas getChat",
         )
-    if "Unsupported get request" in body or "code\":100" in body:
+
+    try:
+        chat_data = chat.json()
+    except ValueError:
+        chat_data = {}
+
+    if chat.status_code == 200 and chat_data.get("ok", False):
+        result = chat_data.get("result", {})
+        chat_type = result.get("type", "?")
+        chat_label = (
+            result.get("username")
+            or result.get("title")
+            or result.get("first_name")
+            or "?"
+        )
         return CheckResult(
-            "WhatsApp", False, f"HTTP {resp.status_code} — phone_number_id zlý?",
-            "Over Phone number ID v Meta App → WhatsApp → API Setup",
+            "Telegram", True,
+            f"bot @{bot_username} → chat type={chat_type}, name='{chat_label}'",
         )
+
+    description = chat_data.get("description", chat.text[:200] if chat.text else "")
+    if "chat not found" in description.lower():
+        return CheckResult(
+            "Telegram", False, f"chat not found pre chat_id='{chat_id}'",
+            "Kristián botu ešte nenapísal /start (DM), alebo zlý TELEGRAM_CHAT_ID. "
+            f"Over cez https://api.telegram.org/bot<TOKEN>/getUpdates",
+        )
+
     return CheckResult(
-        "WhatsApp", False, f"HTTP {resp.status_code}",
-        f"response: {body}",
+        "Telegram", False, f"getChat HTTP {chat.status_code}",
+        f"response: {description}",
     )
 
 
@@ -123,13 +150,15 @@ def _local_sanity_checks(settings) -> list[CheckResult]:  # type: ignore[no-unty
     """Lacné lokálne checky — neprdneme na network ak je niečo evidentne zle."""
     results: list[CheckResult] = []
 
-    # Recipient number: 10-15 digits, žiadny +
-    recipient = settings.whatsapp_recipient_number
-    if not re.fullmatch(r"\d{10,15}", recipient):
+    # Chat ID: buď numerické (kladné DM / záporné group), alebo @username
+    chat_id = settings.telegram_chat_id
+    if not re.fullmatch(r"(@[A-Za-z0-9_]{5,}|-?\d+)", chat_id):
         results.append(CheckResult(
-            "WHATSAPP_RECIPIENT_NUMBER", False,
-            f"'{recipient}' nemá medzinárodný formát",
-            "Bez '+', len číslice, 10-15 znakov. Príklad: 421905111222",
+            "TELEGRAM_CHAT_ID", False,
+            f"'{chat_id}' nie je validné chat ID",
+            "Musí byť buď číslo (DM = kladné, group = záporné, často '-100...'), "
+            "alebo @channel_username. Zisti cez "
+            "https://api.telegram.org/bot<TOKEN>/getUpdates",
         ))
 
     return results
@@ -154,7 +183,7 @@ async def _amain() -> int:
         print(f"{RED}{BOLD}❌ Config validation failed{RESET}")
         print(f"   {e}")
         print(f"\n   {DIM}Tip:{RESET} prešli si .env, alebo Copy-Item .env.example .env "
-              "a vyplň hodnoty podľa SETUP.md sekcií 1-3")
+              "a vyplň hodnoty")
         return 1
 
     print(f"\n{BOLD}🔍 Preflight — synapse-drive-bot{RESET}\n")
@@ -167,11 +196,7 @@ async def _amain() -> int:
     # Network checky — paralelne
     results = await asyncio.gather(
         check_discord(settings.discord_token),
-        check_whatsapp(
-            settings.whatsapp_phone_number_id,
-            settings.whatsapp_access_token,
-            settings.whatsapp_api_version,
-        ),
+        check_telegram(settings.telegram_bot_token, settings.telegram_chat_id),
     )
     for r in results:
         _print_result(r)

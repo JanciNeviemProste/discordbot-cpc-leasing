@@ -11,12 +11,12 @@ import discord
 from discord.ext import commands
 
 from src.config import get_settings
-from src.services.whatsapp import WhatsAppClient
+from src.services.telegram import TelegramClient
 from src.utils.logger import get_logger, setup_logging
 
 
 class SynapseDriveBot(commands.Bot):
-    """Custom bot s lifecycle hookmi pre WhatsApp client."""
+    """Custom bot s lifecycle hookmi pre Telegram client."""
 
     def __init__(self) -> None:
         intents = discord.Intents.default()
@@ -30,14 +30,14 @@ class SynapseDriveBot(commands.Bot):
 
         self.settings = get_settings()
         self.log = get_logger("bot")
-        self.whatsapp_client: WhatsAppClient | None = None
+        self.telegram_client: TelegramClient | None = None
 
     async def setup_hook(self) -> None:
         """Zavolané pri štarte. Init resources + register cogs + sync commands."""
         self.log.info("bot.setup_hook.start")
 
-        # WhatsApp client init
-        self.whatsapp_client = WhatsAppClient()
+        # Telegram client init
+        self.telegram_client = TelegramClient()
 
         # Cogs
         await self.load_extension("src.cogs.leads")
@@ -69,8 +69,8 @@ class SynapseDriveBot(commands.Bot):
 
     async def close(self) -> None:
         self.log.info("bot.shutdown.start")
-        if self.whatsapp_client is not None:
-            await self.whatsapp_client.close()
+        if self.telegram_client is not None:
+            await self.telegram_client.close()
         await super().close()
         self.log.info("bot.shutdown.complete")
 

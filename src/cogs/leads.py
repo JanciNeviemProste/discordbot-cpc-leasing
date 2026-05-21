@@ -1,7 +1,7 @@
 """Leads cog — minimal flow.
 
 Command:
-- /leasing → otvorí GDPR prompt → modal → pošle WhatsApp Kristiánovi
+- /leasing → otvorí GDPR prompt → modal → pošle Telegram správu Kristiánovi
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.config import get_settings
-from src.services.whatsapp import WhatsAppClient
+from src.services.telegram import TelegramClient
 from src.utils.logger import get_logger
 from src.views.gdpr_view import GDPRConsentView
 
@@ -18,9 +18,9 @@ log = get_logger(__name__)
 
 
 class LeadsCog(commands.Cog):
-    def __init__(self, bot: commands.Bot, whatsapp: WhatsAppClient) -> None:
+    def __init__(self, bot: commands.Bot, telegram: TelegramClient) -> None:
         self.bot = bot
-        self.whatsapp = whatsapp
+        self.telegram = telegram
 
     @app_commands.command(
         name="leasing",
@@ -63,10 +63,10 @@ async def process_lead_submission(
     car_description: str,
     note: str,
 ) -> None:
-    """Volane z LeadModal.on_submit. Pošle WhatsApp Kristiánovi a confirmuje
-    flipperovi. Žiadna DB, žiadny embed do kanála."""
+    """Volane z LeadModal.on_submit. Pošle Telegram správu Kristiánovi a
+    confirmuje flipperovi. Žiadna DB, žiadny embed do kanála."""
     bot = interaction.client
-    whatsapp: WhatsAppClient = bot.whatsapp_client  # type: ignore[attr-defined]
+    telegram: TelegramClient = bot.telegram_client  # type: ignore[attr-defined]
 
     log.info(
         "leads.submission",
@@ -75,34 +75,35 @@ async def process_lead_submission(
         client_email_domain=client_email.split("@", 1)[-1] if "@" in client_email else "?",
     )
 
-    wa_result = await whatsapp.send_lead_notification(
+    tg_result = await telegram.send_lead_notification(
         client_name=client_name,
         client_phone=client_phone,
+        client_email=client_email,
         car_description=car_description,
         flipper_name=interaction.user.display_name,
         note=note,
     )
 
-    if wa_result.success:
+    if tg_result.success:
         await interaction.followup.send(
             "✅ **Odoslané Kristiánovi.** Vďaka!",
             ephemeral=True,
         )
         return
 
-    log.error("leads.whatsapp_failed", error=wa_result.error)
+    log.error("leads.telegram_failed", error=tg_result.error)
     await interaction.followup.send(
-        f"⚠️ **WhatsApp zlyhal:** `{wa_result.error}`\n"
+        f"⚠️ **Telegram zlyhal:** `{tg_result.error}`\n"
         f"Údaje klienta sa Kristiánovi neodoslali — daj vedieť adminovi.",
         ephemeral=True,
     )
 
 
 async def setup(bot: commands.Bot) -> None:
-    """Cog loader — `bot.whatsapp_client` musí byť nastavený PRED `load_extension`."""
-    whatsapp = getattr(bot, "whatsapp_client", None)
-    if whatsapp is None:
+    """Cog loader — `bot.telegram_client` musí byť nastavený PRED `load_extension`."""
+    telegram = getattr(bot, "telegram_client", None)
+    if telegram is None:
         raise RuntimeError(
-            "bot.whatsapp_client nebol nastavený. Inicializuj v bot.py pred load_extension."
+            "bot.telegram_client nebol nastavený. Inicializuj v bot.py pred load_extension."
         )
-    await bot.add_cog(LeadsCog(bot, whatsapp))
+    await bot.add_cog(LeadsCog(bot, telegram))

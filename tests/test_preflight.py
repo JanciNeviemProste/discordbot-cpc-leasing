@@ -1,6 +1,7 @@
 """Unit testy pre scripts/preflight.py — mockuje httpx.AsyncClient.get."""
 from __future__ import annotations
 
+import json
 from typing import Any
 from unittest.mock import patch
 
@@ -9,13 +10,12 @@ import pytest
 
 from scripts.preflight import (
     check_discord,
-    check_whatsapp,
+    check_telegram,
 )
 
 
 def _resp(status_code: int, body: str = "", json_data: dict | None = None) -> httpx.Response:
     if json_data is not None:
-        import json
         body = json.dumps(json_data)
     return httpx.Response(
         status_code=status_code,
@@ -29,6 +29,18 @@ def _patch_get(response: httpx.Response | Exception) -> Any:
         if isinstance(response, Exception):
             raise response
         return response
+
+    return patch.object(httpx.AsyncClient, "get", new=fake_get)
+
+
+def _patch_get_sequence(responses: list[httpx.Response]) -> Any:
+    """Vráti responses po jednom — getMe je prvý, getChat druhý."""
+    state = {"i": 0}
+
+    async def fake_get(self: Any, url: str, **kwargs: Any) -> httpx.Response:
+        idx = state["i"]
+        state["i"] += 1
+        return responses[idx]
 
     return patch.object(httpx.AsyncClient, "get", new=fake_get)
 
@@ -63,32 +75,47 @@ async def test_discord_network_error_fails_cleanly() -> None:
 
 
 # ============================================================
-# WhatsApp
+# Telegram
 # ============================================================
 @pytest.mark.asyncio
-async def test_whatsapp_200_passes_with_phone_in_output() -> None:
-    with _patch_get(_resp(200, json_data={
-        "display_phone_number": "+1 555-123-4567",
-        "verified_name": "Drive Test",
-    })):
-        r = await check_whatsapp("phone_id_123", "token", "v21.0")
+async def test_telegram_200_passes_with_chat_info() -> None:
+    me = _resp(200, json_data={
+        "ok": True,
+        "result": {"username": "drive_sk_leasing_bot", "id": 1234567},
+    })
+    chat = _resp(200, json_data={
+        "ok": True,
+        "result": {"id": 987654321, "type": "private", "username": "kristian"},
+    })
+    with _patch_get_sequence([me, chat]):
+        r = await check_telegram("123:abc", "987654321")
     assert r.passed
-    assert "555" in r.detail or "1 555" in r.detail
-    assert "Drive Test" in r.detail
+    assert "drive_sk_leasing_bot" in r.detail
+    assert "private" in r.detail
+    assert "kristian" in r.detail
 
 
 @pytest.mark.asyncio
-async def test_whatsapp_401_hints_at_token_expiry() -> None:
+async def test_telegram_401_hints_at_token() -> None:
     with _patch_get(_resp(401)):
-        r = await check_whatsapp("phone_id", "expired_token", "v21.0")
+        r = await check_telegram("badtoken", "123")
     assert not r.passed
-    assert r.fix_hint and "token" in r.fix_hint.lower()
+    assert r.fix_hint and "BotFather" in r.fix_hint
 
 
 @pytest.mark.asyncio
-async def test_whatsapp_code_100_hints_at_phone_id() -> None:
-    body = '{"error":{"code":100,"message":"Unsupported get request"}}'
-    with _patch_get(_resp(400, body)):
-        r = await check_whatsapp("bad_phone_id", "token", "v21.0")
+async def test_telegram_chat_not_found_hints_at_start() -> None:
+    me = _resp(200, json_data={
+        "ok": True,
+        "result": {"username": "bot", "id": 1},
+    })
+    chat = _resp(400, json_data={
+        "ok": False,
+        "error_code": 400,
+        "description": "Bad Request: chat not found",
+    })
+    with _patch_get_sequence([me, chat]):
+        r = await check_telegram("123:abc", "999")
     assert not r.passed
-    assert r.fix_hint and "Phone number ID" in r.fix_hint
+    assert "chat not found" in r.detail.lower()
+    assert r.fix_hint and ("/start" in r.fix_hint or "getUpdates" in r.fix_hint)

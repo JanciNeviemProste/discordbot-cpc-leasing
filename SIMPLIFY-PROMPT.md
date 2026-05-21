@@ -1,5 +1,9 @@
 # SIMPLIFY-PROMPT.md — Zjednodušenie Synapse Drive Bot
 
+> ⚠️ **SUPERSEDED 2026-05-21** — WhatsApp Cloud API bol nahradený Telegram botom.
+> Aktuálna verzia bota posiela leady cez Telegram (`src/services/telegram.py`), nie WhatsApp template.
+> Tento dokument zostáva ako historický kontext pre pôvodný WA flow.
+
 > Inštrukcie pre Claude Code. Prečítaj celé, potom začni. Pýtaj sa ak niečo nie je jasné.
 
 ## Cieľ
