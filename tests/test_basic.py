@@ -4,9 +4,11 @@ from __future__ import annotations
 import pytest
 
 from src.services.validators import (
+    is_url,
     is_valid_email,
     is_valid_phone,
     is_valid_vin,
+    looks_like_price,
     normalize_phone,
 )
 
@@ -53,3 +55,26 @@ def test_vin_validation() -> None:
     assert is_valid_vin("WAUZZZ8K1AA000001")
     assert not is_valid_vin("WAUIO8K1AA000001")  # contains I, O
     assert not is_valid_vin("TOO_SHORT")
+
+
+@pytest.mark.parametrize("price,expected", [
+    ("12500", True),
+    ("12 500 €", True),
+    ("12.5k", True),
+    ("", False),
+    ("zadarmo", False),
+    ("€", False),
+])
+def test_looks_like_price(price: str, expected: bool) -> None:
+    assert looks_like_price(price) is expected
+
+
+@pytest.mark.parametrize("link,expected", [
+    ("https://www.autobazar.eu/inzerat/123", True),
+    ("http://bazos.sk/auto", True),
+    ("www.autobazar.eu", True),
+    ("Audi A4 2019", False),
+    ("", False),
+])
+def test_is_url(link: str, expected: bool) -> None:
+    assert is_url(link) is expected

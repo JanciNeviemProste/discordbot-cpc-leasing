@@ -51,18 +51,18 @@ class TelegramClient:
         client_name: str,
         client_phone: str,
         client_email: str,
-        car_description: str,
+        price: str,
+        car_link: str,
         flipper_name: str,
-        note: str,
     ) -> TelegramResult:
         """Pošli formátovanú správu o novej žiadosti o leasing."""
         text = _format_message(
             client_name=client_name,
             client_phone=client_phone,
             client_email=client_email,
-            car_description=car_description,
+            price=price,
+            car_link=car_link,
             flipper_name=flipper_name,
-            note=note,
         )
         return await self._post(text)
 
@@ -131,9 +131,9 @@ def _format_message(
     client_name: str,
     client_phone: str,
     client_email: str,
-    car_description: str,
+    price: str,
+    car_link: str,
     flipper_name: str,
-    note: str,
 ) -> str:
     """Markdown správa pre Kristiána. Hviezdičky okolo nadpisu sú formátovanie,
     ostatné texty sú escapnuté ako literal."""
@@ -144,7 +144,7 @@ def _format_message(
         f"👤 Klient: {e(client_name)}\n"
         f"📞 Telefón: {e(client_phone)}\n"
         f"✉️ Email: {e(client_email)}\n"
-        f"🚙 Auto: {e(car_description)}\n"
-        f"👨‍💼 Flipper: {e(flipper_name)}\n"
-        f"📝 Poznámka: {e(note)}"
+        f"💰 Cena: {e(price)}\n"
+        f"🔗 Auto: {e(car_link)}\n"
+        f"👨‍💼 Flipper: {e(flipper_name)}"
     )

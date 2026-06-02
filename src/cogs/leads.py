@@ -60,18 +60,20 @@ async def process_lead_submission(
     client_name: str,
     client_phone: str,
     client_email: str,
-    car_description: str,
-    note: str,
+    price: str,
+    car_link: str,
 ) -> None:
-    """Volane z LeadModal.on_submit. Pošle Telegram správu Kristiánovi a
-    confirmuje flipperovi. Žiadna DB, žiadny embed do kanála."""
+    """Volane z LeadModal.on_submit. Pošle Telegram správu Kristiánovi (kritická
+    cesta) a zapíše lead do Google Sheetu pre Petra (best-effort). Žiadna DB."""
     bot = interaction.client
     telegram: TelegramClient = bot.telegram_client  # type: ignore[attr-defined]
+    sheets = getattr(bot, "sheets_client", None)
+    flipper_name = interaction.user.display_name
 
     log.info(
         "leads.submission",
         flipper_id=str(interaction.user.id),
-        flipper_name=interaction.user.display_name,
+        flipper_name=flipper_name,
         client_email_domain=client_email.split("@", 1)[-1] if "@" in client_email else "?",
     )
 
@@ -79,22 +81,46 @@ async def process_lead_submission(
         client_name=client_name,
         client_phone=client_phone,
         client_email=client_email,
-        car_description=car_description,
-        flipper_name=interaction.user.display_name,
-        note=note,
+        price=price,
+        car_link=car_link,
+        flipper_name=flipper_name,
     )
 
-    if tg_result.success:
+    # Evidencia pre Petra — best-effort, nezablokuje potvrdenie flipperovi.
+    sheet_ok = True
+    if sheets is not None:
+        sheet_result = await sheets.append_lead(
+            client_name=client_name,
+            client_email=client_email,
+            client_phone=client_phone,
+            price=price,
+            car_link=car_link,
+            flipper_name=flipper_name,
+        )
+        sheet_ok = sheet_result.success
+        if not sheet_ok:
+            log.error("leads.sheets_failed", error=sheet_result.error)
+
+    if not tg_result.success:
+        log.error("leads.telegram_failed", error=tg_result.error)
         await interaction.followup.send(
-            "✅ **Odoslané Kristiánovi.** Vďaka!",
+            f"⚠️ **Telegram zlyhal:** `{tg_result.error}`\n"
+            "Údaje klienta sa Kristiánovi neodoslali — daj vedieť adminovi.",
             ephemeral=True,
         )
         return
 
-    log.error("leads.telegram_failed", error=tg_result.error)
+    if not sheet_ok:
+        await interaction.followup.send(
+            "✅ **Odoslané Kristiánovi.**\n"
+            "⚠️ Zápis do evidencie (Google Sheet) zlyhal — Kristián lead má, "
+            "ale do tabuľky sa nezapísal. Daj vedieť adminovi.",
+            ephemeral=True,
+        )
+        return
+
     await interaction.followup.send(
-        f"⚠️ **Telegram zlyhal:** `{tg_result.error}`\n"
-        f"Údaje klienta sa Kristiánovi neodoslali — daj vedieť adminovi.",
+        "✅ **Odoslané Kristiánovi.** Vďaka!",
         ephemeral=True,
     )
 

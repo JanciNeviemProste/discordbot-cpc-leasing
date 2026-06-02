@@ -54,3 +54,10 @@ def is_url(text: str) -> bool:
     """Hrubá detekcia či input je URL alebo voľný text."""
     t = text.strip().lower()
     return t.startswith("http://") or t.startswith("https://") or t.startswith("www.")
+
+
+def looks_like_price(text: str) -> bool:
+    """Cena musí obsahovať aspoň jednu číslicu (akceptuje '12500', '12 500 €', '12.5k')."""
+    if not text:
+        return False
+    return any(ch.isdigit() for ch in text)

@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     telegram_bot_token: str = Field(..., min_length=20)
     telegram_chat_id: str
 
+    # ---- Google Sheets (evidencia pre Petra) ----
+    # Ak je google_sheet_id prázdne, zápis do Sheetu sa preskočí (len Telegram).
+    google_sheet_id: str | None = None
+    google_service_account_file: str = "secrets/google-service-account.json"
+
     # ---- App ----
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     environment: Literal["development", "production"] = "production"

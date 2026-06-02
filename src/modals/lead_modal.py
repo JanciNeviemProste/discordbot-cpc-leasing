@@ -1,19 +1,21 @@
 """Lead modal — formulár, ktorý sa otvorí flipperovi po GDPR potvrdení.
 
-Discord modal limit: 5 text inputov:
-1. Meno klienta (single line)
-2. Telefón (single line)
-3. Email (single line)
-4. Auto: URL alebo popis (multi-line)
-5. Poznámka (multi-line, voliteľné)
+Discord modal limit: 5 text inputov. Všetky polia povinné:
+1. Meno a priezvisko klienta (single line)
+2. Email (single line)
+3. Telefón (single line)
+4. Cena (single line)
+5. Link na auto (single line)
 """
 from __future__ import annotations
 
 import discord
 
 from src.services.validators import (
+    is_url,
     is_valid_email,
     is_valid_phone,
+    looks_like_price,
     normalize_phone,
 )
 from src.utils.logger import get_logger
@@ -32,14 +34,6 @@ class LeadModal(discord.ui.Modal, title="Žiadosť o leasing — drive.sk"):
         style=discord.TextStyle.short,
     )
 
-    client_phone = discord.ui.TextInput(
-        label="Telefón klienta",
-        placeholder="+421 905 123 456",
-        required=True,
-        max_length=20,
-        style=discord.TextStyle.short,
-    )
-
     client_email = discord.ui.TextInput(
         label="Email klienta",
         placeholder="jan.novak@gmail.com",
@@ -48,20 +42,28 @@ class LeadModal(discord.ui.Modal, title="Žiadosť o leasing — drive.sk"):
         style=discord.TextStyle.short,
     )
 
-    car_info = discord.ui.TextInput(
-        label="Auto (link na inzerát alebo popis)",
-        placeholder="https://www.autobazar.eu/... alebo: Audi A4 2019 nafta 150k km 12500€",
+    client_phone = discord.ui.TextInput(
+        label="Telefón klienta",
+        placeholder="+421 905 123 456",
         required=True,
-        max_length=500,
-        style=discord.TextStyle.paragraph,
+        max_length=20,
+        style=discord.TextStyle.short,
     )
 
-    note = discord.ui.TextInput(
-        label="Poznámka (voliteľné)",
-        placeholder="napr. volať po 17:00, klient má hotovosť 5000€, ...",
-        required=False,
+    price = discord.ui.TextInput(
+        label="Cena auta",
+        placeholder="napr. 12 500 €",
+        required=True,
+        max_length=30,
+        style=discord.TextStyle.short,
+    )
+
+    car_link = discord.ui.TextInput(
+        label="Link na auto",
+        placeholder="https://www.autobazar.eu/...",
+        required=True,
         max_length=500,
-        style=discord.TextStyle.paragraph,
+        style=discord.TextStyle.short,
     )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
@@ -86,6 +88,24 @@ class LeadModal(discord.ui.Modal, title="Žiadosť o leasing — drive.sk"):
             )
             return
 
+        price_raw = self.price.value.strip()
+        if not looks_like_price(price_raw):
+            await interaction.response.send_message(
+                f"❌ Neplatná cena: `{price_raw}`\n"
+                "Zadaj sumu, napr. `12 500 €` alebo `12500`.",
+                ephemeral=True,
+            )
+            return
+
+        car_link_raw = self.car_link.value.strip()
+        if not is_url(car_link_raw):
+            await interaction.response.send_message(
+                f"❌ Neplatný link na auto: `{car_link_raw}`\n"
+                "Vlož celú URL inzerátu (začína `https://` alebo `www.`).",
+                ephemeral=True,
+            )
+            return
+
         await interaction.response.defer(ephemeral=True, thinking=True)
 
         try:
@@ -94,8 +114,8 @@ class LeadModal(discord.ui.Modal, title="Žiadosť o leasing — drive.sk"):
                 client_name=self.client_name.value.strip(),
                 client_phone=phone_normalized,
                 client_email=email,
-                car_description=self.car_info.value.strip(),
-                note=self.note.value.strip() if self.note.value else "-",
+                price=price_raw,
+                car_link=car_link_raw,
             )
         except Exception as e:  # noqa: BLE001
             log.exception("modal.submit_failed", error=str(e))

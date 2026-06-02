@@ -8,8 +8,10 @@ from unittest.mock import patch
 import httpx
 import pytest
 
+import scripts.preflight as preflight
 from scripts.preflight import (
     check_discord,
+    check_sheets,
     check_telegram,
 )
 
@@ -119,3 +121,52 @@ async def test_telegram_chat_not_found_hints_at_start() -> None:
     assert not r.passed
     assert "chat not found" in r.detail.lower()
     assert r.fix_hint and ("/start" in r.fix_hint or "getUpdates" in r.fix_hint)
+
+
+# ============================================================
+# Google Sheets
+# ============================================================
+@pytest.mark.asyncio
+async def test_sheets_missing_file_hints_at_download() -> None:
+    with patch("os.path.exists", return_value=False):
+        r = await check_sheets("sheet123", "secrets/missing.json")
+    assert not r.passed
+    assert "neexistuje" in r.detail
+    assert r.fix_hint and "service account" in r.fix_hint.lower()
+
+
+@pytest.mark.asyncio
+async def test_sheets_accessible_passes_with_title() -> None:
+    def fake_open(sheet_id: str, sa_file: str) -> str:
+        return "drive.sk leady"
+
+    with patch("os.path.exists", return_value=True), \
+            patch.object(preflight, "_open_sheet_title", new=fake_open):
+        r = await check_sheets("sheet123", "secrets/sa.json")
+    assert r.passed
+    assert "drive.sk leady" in r.detail
+
+
+@pytest.mark.asyncio
+async def test_sheets_permission_denied_hints_at_sharing() -> None:
+    def fake_open(sheet_id: str, sa_file: str) -> str:
+        raise PermissionError("The caller does not have permission (403)")
+
+    with patch("os.path.exists", return_value=True), \
+            patch.object(preflight, "_open_sheet_title", new=fake_open):
+        r = await check_sheets("sheet123", "secrets/sa.json")
+    assert not r.passed
+    assert "403" in r.detail
+    assert r.fix_hint and "Editor" in r.fix_hint
+
+
+@pytest.mark.asyncio
+async def test_sheets_not_found_hints_at_sheet_id() -> None:
+    def fake_open(sheet_id: str, sa_file: str) -> str:
+        raise Exception("Requested entity was not found (404)")
+
+    with patch("os.path.exists", return_value=True), \
+            patch.object(preflight, "_open_sheet_title", new=fake_open):
+        r = await check_sheets("badid", "secrets/sa.json")
+    assert not r.passed
+    assert r.fix_hint and "GOOGLE_SHEET_ID" in r.fix_hint

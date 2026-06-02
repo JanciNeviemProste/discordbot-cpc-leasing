@@ -12,6 +12,13 @@ python-dotenv==1.0.1
 # Logging
 structlog==24.4.0
 
+# Google Sheets evidencia (service-account auth)
+gspread==6.1.4
+google-auth==2.35.0
+
+# IANA tz databáza — Windows ju nemá vstavanú (potrebné pre zoneinfo)
+tzdata==2024.2
+
 # Dev / tests (optional)
 pytest==8.3.3
 pytest-asyncio==0.24.0

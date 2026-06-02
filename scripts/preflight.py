@@ -14,11 +14,14 @@ Exit 0 ak všetky network checky PASS; 1 inak.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import sys
 from dataclasses import dataclass
 
 import httpx
+
+_SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 # Windows defaultný cp1250 nedokáže emoji; force UTF-8
 if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
@@ -146,6 +149,53 @@ async def check_telegram(bot_token: str, chat_id: str) -> CheckResult:
     )
 
 
+def _open_sheet_title(sheet_id: str, sa_file: str) -> str:
+    """Blocking — otvorí sheet cez service account a vráti jeho názov.
+
+    Vynesené samostatne, aby sa to dalo v testoch ľahko zmockovať
+    (testy nepotrebujú reálny gspread ani sieť).
+    """
+    import gspread
+    from google.oauth2.service_account import Credentials
+
+    creds = Credentials.from_service_account_file(sa_file, scopes=_SHEETS_SCOPES)
+    client = gspread.authorize(creds)
+    return client.open_by_key(sheet_id).title
+
+
+async def check_sheets(sheet_id: str, sa_file: str) -> CheckResult:
+    """Overí, že service-account JSON existuje a má prístup k Sheetu."""
+    if not os.path.exists(sa_file):
+        return CheckResult(
+            "Sheets", False, f"súbor '{sa_file}' neexistuje",
+            "Stiahni JSON kľúč service accountu z Google Cloud a ulož ho sem "
+            "(alebo nastav GOOGLE_SERVICE_ACCOUNT_FILE na správnu cestu)",
+        )
+
+    try:
+        title = await asyncio.to_thread(_open_sheet_title, sheet_id, sa_file)
+    except Exception as e:  # noqa: BLE001
+        msg = str(e)
+        lowered = msg.lower()
+        if "permission" in lowered or "403" in lowered:
+            return CheckResult(
+                "Sheets", False, "prístup zamietnutý (403)",
+                "Zdieľaj Sheet so service-account emailom (client_email z JSON) "
+                "ako Editor",
+            )
+        if "not found" in lowered or "404" in lowered or "unable to parse range" in lowered:
+            return CheckResult(
+                "Sheets", False, f"sheet sa nenašiel pre id='{sheet_id}'",
+                "Skontroluj GOOGLE_SHEET_ID — je to časť URL medzi /d/ a /edit",
+            )
+        return CheckResult(
+            "Sheets", False, f"chyba: {msg[:160]}",
+            "Over JSON kľúč, GOOGLE_SHEET_ID a zdieľanie Sheetu",
+        )
+
+    return CheckResult("Sheets", True, f"sheet '{title}' prístupný")
+
+
 def _local_sanity_checks(settings) -> list[CheckResult]:  # type: ignore[no-untyped-def]
     """Lacné lokálne checky — neprdneme na network ak je niečo evidentne zle."""
     results: list[CheckResult] = []
@@ -193,24 +243,33 @@ async def _amain() -> int:
     for r in local_results:
         _print_result(r)
 
-    # Network checky — paralelne
-    results = await asyncio.gather(
+    # Network checky — paralelne. Sheets len ak je nakonfigurovaný.
+    checks = [
         check_discord(settings.discord_token),
         check_telegram(settings.telegram_bot_token, settings.telegram_chat_id),
-    )
+    ]
+    if settings.google_sheet_id:
+        checks.append(
+            check_sheets(settings.google_sheet_id, settings.google_service_account_file)
+        )
+    else:
+        print(f"  {DIM}⏭  Sheets      preskočené (GOOGLE_SHEET_ID prázdne){RESET}")
+
+    results = await asyncio.gather(*checks)
     for r in results:
         _print_result(r)
 
+    total = len(results)
     network_pass = sum(1 for r in results if r.passed)
     local_fail = sum(1 for r in local_results if not r.passed)
 
     print(f"\n  {DIM}─────────────────────────────────────────{RESET}")
-    if network_pass == 2 and local_fail == 0:
-        print(f"  {GREEN}{BOLD}✓ {network_pass}/2 PASS{RESET} — môžeš spustiť: "
+    if network_pass == total and local_fail == 0:
+        print(f"  {GREEN}{BOLD}✓ {network_pass}/{total} PASS{RESET} — môžeš spustiť: "
               f"{BOLD}.venv\\Scripts\\python -m src.bot{RESET}\n")
         return 0
     else:
-        msg = f"{network_pass}/2 network PASS"
+        msg = f"{network_pass}/{total} network PASS"
         if local_fail:
             msg += f", {local_fail} lokálnych chýb"
         print(f"  {YELLOW}{BOLD}{msg}{RESET} — oprav vyššie a spusti znova\n")

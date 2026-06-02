@@ -1,10 +1,10 @@
 # Synapse Drive Bot
 
-**Discord bot pre drive.sk — flipper napíše `/leasing`, vyplní formulár, údaje klienta sa pošlú na Telegram finančnému poradcovi Kristiánovi.**
+**Discord bot pre drive.sk — flipper napíše `/leasing`, vyplní formulár, lead ide na Telegram Kristiánovi (finančák) a zároveň sa zapíše do Google Sheetu pre Petra (majiteľ).**
 
-Klient: **Peťo Švikruha (drive.sk)** · Stack: **Python 3.11 + discord.py 2.4 + Telegram Bot API**
+Klient: **Peťo Švikruha (drive.sk)** · Stack: **Python 3.11 + discord.py 2.4 + Telegram Bot API + Google Sheets**
 
-Žiadna databáza. Žiadne status buttony. Žiadny scraper. Minimal flow.
+Žiadna databáza (evidencia je Google Sheet). Žiadne status buttony. Žiadny scraper. Minimal flow.
 
 ---
 
@@ -21,7 +21,7 @@ python -m scripts.preflight       # voliteľné: over Discord + Telegram creds
 python -m src.bot
 ```
 
-V Discorde: `/leasing` → potvrď GDPR → vyplň formulár → Kristián má Telegram správu.
+V Discorde: `/leasing` → potvrď GDPR → vyplň formulár → Kristián má Telegram správu + riadok pribudne v Google Sheete.
 
 ---
 
@@ -29,14 +29,18 @@ V Discorde: `/leasing` → potvrď GDPR → vyplň formulár → Kristián má T
 
 1. Flipper je v dedikovanom kanáli (napr. `#leasing`) a napíše `/leasing`
 2. Bot pošle **ephemerálnu** GDPR výzvu s tlačidlom *„Mám súhlas, pokračovať"*
-3. Po kliku sa otvorí **modal** s 5 poľami:
+3. Po kliku sa otvorí **modal** s 5 povinnými poľami:
    - Meno a priezvisko klienta
-   - Telefón (SK/CZ validácia)
    - Email (validácia)
-   - Auto — link na inzerát alebo voľný popis
-   - Poznámka (voliteľné)
-4. Po odoslaní bot pošle **Telegram správu Kristiánovi** s formátovaným zhrnutím
+   - Telefón (SK/CZ validácia)
+   - Cena auta
+   - Link na auto (URL inzerátu)
+4. Po odoslaní bot:
+   - pošle **Telegram správu Kristiánovi** (finančák) — kritická cesta
+   - zapíše **riadok do Google Sheetu** pre Petra (majiteľ) — evidencia, best-effort
 5. Flipper dostane ephemerálne `✅ Odoslané Kristiánovi`
+
+> Google Sheet je voliteľný: ak `GOOGLE_SHEET_ID` nie je nastavený, zápis sa preskočí a beží len Telegram.
 
 ---
 
@@ -64,7 +68,22 @@ V Discorde: `/leasing` → potvrď GDPR → vyplň formulár → Kristián má T
    - DM = kladné číslo (`987654321`), group = záporné (`-100123456789`)
 6. Ak `getUpdates` vráti prázdny `result: []`, Kristián ešte botu nenapísal — over že klikol Start, potom refresh
 
-### 3. `.env`
+### 3. Google Sheets (evidencia pre Petra)
+
+Bot zapisuje každý lead ako nový riadok cez **service account** (žiadny OAuth login).
+
+1. <https://console.cloud.google.com> → vytvor (alebo vyber) projekt
+2. **APIs & Services → Library** → zapni **Google Sheets API**
+3. **APIs & Services → Credentials → Create Credentials → Service account** → daj meno (napr. `drive-bot`) → Create
+4. Pri service accounte: **Keys → Add Key → Create new key → JSON** → stiahne sa súbor
+5. Premenuj ho na `google-service-account.json` a daj do priečinka `secrets/` v projekte (je v `.gitignore`)
+6. Otvor ten JSON, nájdi `"client_email": "...@...iam.gserviceaccount.com"` — **skopíruj ten email**
+7. Vytvor (alebo otvor) cieľový Google Sheet → **Share** → vlož ten email → rola **Editor** → Send
+8. Z URL Sheetu skopíruj **Sheet ID** (časť medzi `/d/` a `/edit`) → `GOOGLE_SHEET_ID`
+
+Hlavičku (Dátum, Meno, Email, Telefón, Cena, Link, Flipper) zapíše bot sám pri prvom leade, ak je list prázdny.
+
+### 4. `.env`
 
 Vytvor zo šablóny:
 
@@ -80,19 +99,21 @@ DISCORD_GUILD_ID=
 DISCORD_LEASING_CHANNEL_ID=        # voliteľné — kanál kde /leasing funguje
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=                  # chat ID Kristiána (DM) alebo group
+GOOGLE_SHEET_ID=                   # voliteľné — ak prázdne, beží len Telegram
+GOOGLE_SERVICE_ACCOUNT_FILE=secrets/google-service-account.json
 LOG_LEVEL=INFO
 ENVIRONMENT=production
 ```
 
-### 4. Preflight (voliteľné, odporúčané)
+### 5. Preflight (voliteľné, odporúčané)
 
 ```powershell
 .venv\Scripts\python -m scripts.preflight
 ```
 
-Overí Discord token + Telegram credentials bez spustenia bota. Cieľ: `2/2 PASS`.
+Overí Discord token + Telegram + (ak je nastavený) Google Sheet bez spustenia bota. Cieľ: `3/3 PASS` (alebo `2/2` ak Sheet nepoužívaš).
 
-### 5. Spustenie
+### 6. Spustenie
 
 ```powershell
 .venv\Scripts\python -m src.bot
@@ -117,8 +138,9 @@ synapse-drive-bot/
 │   ├── modals/lead_modal.py ← 5-field form
 │   ├── views/gdpr_view.py   ← GDPR consent button
 │   ├── services/
-│   │   ├── telegram.py      ← Telegram Bot API klient
-│   │   └── validators.py    ← phone/email
+│   │   ├── telegram.py      ← Telegram Bot API klient (Kristián)
+│   │   ├── sheets.py        ← Google Sheets evidencia (Peter)
+│   │   └── validators.py    ← phone/email/cena/url
 │   └── utils/logger.py      ← structlog setup
 ├── scripts/
 │   └── preflight.py         ← credential validator
@@ -139,6 +161,10 @@ synapse-drive-bot/
 | Markdown sa zobrazí ako text (`\*hviezdičky\*`) | Chýba escapovanie MarkdownV2 — over že máš najnovšiu `_escape_markdown_v2()` |
 | Group chat ID prestal fungovať | Group prešiel na supergroup — znova `getUpdates`, nové ID (zvyčajne `-100...`) |
 | `Forbidden: bot was blocked by the user` | Kristián botu zablokoval. Nech ho odblokuje a znova `/start` |
+| Sheets: `prístup zamietnutý (403)` | Sheet nie je zdieľaný so service-account emailom — Share → email z `client_email` → Editor |
+| Sheets: `sheet sa nenašiel` | Zlý `GOOGLE_SHEET_ID` — je to časť URL medzi `/d/` a `/edit` |
+| Sheets: `súbor neexistuje` | JSON kľúč nie je na ceste z `GOOGLE_SERVICE_ACCOUNT_FILE` (default `secrets/`) |
+| Lead prišiel Kristiánovi, ale nie do Sheetu | Bot to oznámi flipperovi (`⚠️ Zápis do evidencie zlyhal`). Pozri logy `leads.sheets_failed` |
 
 ---
 

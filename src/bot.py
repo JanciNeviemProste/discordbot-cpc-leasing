@@ -11,6 +11,7 @@ import discord
 from discord.ext import commands
 
 from src.config import get_settings
+from src.services.sheets import SheetsClient
 from src.services.telegram import TelegramClient
 from src.utils.logger import get_logger, setup_logging
 
@@ -31,6 +32,7 @@ class SynapseDriveBot(commands.Bot):
         self.settings = get_settings()
         self.log = get_logger("bot")
         self.telegram_client: TelegramClient | None = None
+        self.sheets_client: SheetsClient | None = None
 
     async def setup_hook(self) -> None:
         """Zavolané pri štarte. Init resources + register cogs + sync commands."""
@@ -38,6 +40,13 @@ class SynapseDriveBot(commands.Bot):
 
         # Telegram client init
         self.telegram_client = TelegramClient()
+
+        # Google Sheets evidencia — len ak je nakonfigurovaný sheet
+        if self.settings.google_sheet_id:
+            self.sheets_client = SheetsClient()
+            self.log.info("bot.sheets_enabled")
+        else:
+            self.log.info("bot.sheets_disabled", reason="GOOGLE_SHEET_ID prázdne")
 
         # Cogs
         await self.load_extension("src.cogs.leads")
