@@ -12,6 +12,7 @@ from __future__ import annotations
 import discord
 
 from src.services.validators import (
+    format_phone_pretty,
     is_url,
     is_valid_email,
     is_valid_phone,
@@ -43,9 +44,10 @@ class LeadModal(discord.ui.Modal, title="Žiadosť o leasing — drive.sk"):
     )
 
     client_phone = discord.ui.TextInput(
-        label="Telefón klienta",
-        placeholder="+421 905 123 456",
+        label="Telefón klienta (9 číslic)",
+        placeholder="0948 000 000",
         required=True,
+        min_length=9,
         max_length=20,
         style=discord.TextStyle.short,
     )
@@ -138,7 +140,7 @@ class LeadModal(discord.ui.Modal, title="Žiadosť o leasing — drive.sk"):
             await process_lead_submission(
                 interaction=interaction,
                 client_name=self.client_name.value.strip(),
-                client_phone=phone_normalized,
+                client_phone=format_phone_pretty(phone_normalized),
                 client_email=email,
                 price=price_raw,
                 car_link=car_link_raw,

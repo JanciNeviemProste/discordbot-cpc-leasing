@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from src.services.validators import (
+    format_phone_pretty,
     is_url,
     is_valid_email,
     is_valid_phone,
@@ -67,6 +68,21 @@ def test_vin_validation() -> None:
 ])
 def test_looks_like_price(price: str, expected: bool) -> None:
     assert looks_like_price(price) is expected
+
+
+@pytest.mark.parametrize("normalized,expected", [
+    ("+421948000000", "+421 948 000 000"),
+    ("+421905123456", "+421 905 123 456"),
+    ("+420723456789", "+420 723 456 789"),
+    ("12345", "12345"),               # fallback — neznámy tvar, nezmenené
+    ("+421 948 000 000", "+421 948 000 000"),  # už s medzerami → fallback (nie 9 číslic)
+])
+def test_format_phone_pretty(normalized: str, expected: str) -> None:
+    assert format_phone_pretty(normalized) == expected
+
+
+def test_normalize_then_format_roundtrip() -> None:
+    assert format_phone_pretty(normalize_phone("0948 000 000")) == "+421 948 000 000"
 
 
 @pytest.mark.parametrize("link,expected", [

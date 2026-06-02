@@ -56,6 +56,20 @@ def is_url(text: str) -> bool:
     return t.startswith("http://") or t.startswith("https://") or t.startswith("www.")
 
 
+def format_phone_pretty(phone: str) -> str:
+    """Normalizované číslo (+421948000000) → čitateľné +421 948 000 000.
+
+    SK/CZ: prefix + 9 číslic po trojiciach. Fallback: vráti vstup nezmenený.
+    """
+    p = phone.strip()
+    for prefix in ("+421", "+420"):
+        if p.startswith(prefix):
+            rest = p[len(prefix):]
+            if len(rest) == 9 and rest.isdigit():
+                return f"{prefix} {rest[0:3]} {rest[3:6]} {rest[6:9]}"
+    return phone
+
+
 def looks_like_price(text: str) -> bool:
     """Cena musí obsahovať aspoň jednu číslicu (akceptuje '12500', '12 500 €', '12.5k')."""
     if not text:
