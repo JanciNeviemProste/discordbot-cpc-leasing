@@ -1,8 +1,14 @@
 """Google Sheets evidencia leadov — trvalý záznam pre Petra (majiteľa).
 
-Jeden spoločný hárok pre všetky typy (Leasing/PZP/Kasko/Iné); produktovo-
-špecifické polia sa mapujú do generických stĺpcov Predmet/Suma/Doplnok.
-gspread je synchrónny, blocking volania wrapujeme do `asyncio.to_thread`.
+Každý lead sa zapíše ako nový riadok. gspread je synchrónny, takže
+blocking volania wrapujeme do `asyncio.to_thread`, aby nezablokovali
+discord.py event loop.
+
+Setup:
+- Google Cloud → vytvor service account → stiahni JSON kľúč
+- ulož kľúč ako secrets/google-service-account.json (gitignored)
+- zdieľaj cieľový Sheet so service-account emailom ako Editor
+- skopíruj Sheet ID z URL → GOOGLE_SHEET_ID
 """
 from __future__ import annotations
 
@@ -17,13 +23,6 @@ from google.oauth2.service_account import Credentials
 from gspread.utils import ValidationConditionType
 
 from src.config import get_settings
-from src.products import (
-    COLUMN_DOPLNOK,
-    COLUMN_PREDMET,
-    COLUMN_SUMA,
-    PRODUCT_TYP_OPTIONS,
-    Product,
-)
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -31,21 +30,21 @@ log = get_logger(__name__)
 # Sheets API scope — len spreadsheets, nič viac.
 _SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# Spoločná hlavička (10 stĺpcov A–J).
+# Hlavička, ktorú Peter uvidí. Poradie = poradie hodnôt v riadku nižšie.
 _HEADER = [
-    "Dátum",                    # A
-    "Meno a priezvisko",        # B
-    "Email",                    # C
-    "Telefón",                  # D
-    "Typ produktu",             # E — dropdown
-    "Predmet (auto/vozidlo)",   # F
-    "Cena / hodnota",           # G
-    "Doplnok (EČV/pozn.)",      # H
-    "Flipper",                  # I
-    "Stav",                     # J — dropdown, default "Nový lead"
+    "Dátum",
+    "Meno a priezvisko",
+    "Email",
+    "Telefón",
+    "Cena",
+    "Link na auto",
+    "Flipper",
+    "Typ produktu",  # stĺpec H — dropdown, vyberá sa ručne v Sheete
+    "Stav",          # stĺpec I — dropdown, default "Nový lead"
 ]
-_LAST_COL = "J"
 
+# Možnosti pre dropdowny v Sheete.
+_PRODUKT_OPTIONS = ["Leasing", "PZP", "Kasko"]
 _STAV_OPTIONS = ["Nový lead", "Kontaktovaný", "V procese", "Schválený", "Neschválený"]
 
 _TZ = ZoneInfo("Europe/Bratislava")
@@ -59,31 +58,26 @@ def _sheet_safe(value: str) -> str:
     return value
 
 
-def build_row(
-    product: Product,
+def _build_row(
     timestamp: str,
     client_name: str,
     client_email: str,
     client_phone: str,
-    extras: dict[str, str],
+    price: str,
+    car_link: str,
     flipper_name: str,
 ) -> list[str]:
-    """Zostav riadok podľa _HEADER. Extra polia produktu sa mapujú do
-    generických stĺpcov (predmet/suma/doplnok); Typ produktu = product.typ;
-    Stav default 'Nový lead'."""
-    buckets = {COLUMN_PREDMET: "", COLUMN_SUMA: "", COLUMN_DOPLNOK: ""}
-    for ef in product.extras:
-        buckets[ef.column] = extras.get(ef.key, "")
+    """Zostav riadok v poradí podľa _HEADER. Typ produktu prázdny (vyberie sa
+    v Sheete), Stav predvyplnený na prvú možnosť ('Nový lead')."""
     return [
         timestamp,
         client_name,
         client_email,
         client_phone,
-        product.typ,
-        buckets[COLUMN_PREDMET],
-        buckets[COLUMN_SUMA],
-        buckets[COLUMN_DOPLNOK],
+        price,
+        car_link,
         flipper_name,
+        "",
         _STAV_OPTIONS[0],
     ]
 
@@ -104,19 +98,24 @@ class SheetsClient:
 
     async def append_lead(
         self,
-        product: Product,
         *,
         client_name: str,
         client_email: str,
         client_phone: str,
-        extras: dict[str, str],
+        price: str,
+        car_link: str,
         flipper_name: str,
     ) -> SheetsResult:
         """Pridaj lead ako nový riadok. Best-effort — chyba nezablokuje flow."""
         timestamp = datetime.now(_TZ).strftime("%Y-%m-%d %H:%M")
-        row = build_row(
-            product, timestamp, client_name, client_email, client_phone,
-            extras, flipper_name,
+        row = _build_row(
+            timestamp,
+            client_name,
+            client_email,
+            client_phone,
+            price,
+            car_link,
+            flipper_name,
         )
         try:
             await asyncio.to_thread(self._append_row_blocking, row)
@@ -124,7 +123,7 @@ class SheetsClient:
             log.error("sheets.append_failed", error=str(e))
             return SheetsResult(success=False, error=str(e))
 
-        log.info("sheets.appended", typ=product.typ)
+        log.info("sheets.appended")
         return SheetsResult(success=True)
 
     # ---- blocking interné (bežia v thread executore) ----
@@ -155,7 +154,7 @@ class SheetsClient:
         """Zaisti, že hlavička presne sedí s _HEADER.
 
         - prázdny list → zapíš hlavičku
-        - iná hlavička → prepíš riadok 1 (kvôli zmene schémy)
+        - iná hlavička → prepíš riadok 1 (opraví Sheet z akéhokoľvek stavu)
         """
         first_row = worksheet.row_values(1)
         if not first_row:
@@ -164,14 +163,15 @@ class SheetsClient:
             worksheet.update([_HEADER], "A1", value_input_option="USER_ENTERED")
 
     def _ensure_dropdowns(self, worksheet: Any) -> None:
-        """Dropdowny: Typ produktu (E) a Stav (J). Best-effort."""
+        """Nastav dropdown validáciu na stĺpce Typ produktu (H) a Stav (I).
+        Best-effort — zlyhanie nezablokuje zápis leadov."""
         try:
             worksheet.add_validation(
-                "E2:E1000", ValidationConditionType.one_of_list,
-                PRODUCT_TYP_OPTIONS, strict=True, showCustomUi=True,
+                "H2:H1000", ValidationConditionType.one_of_list,
+                _PRODUKT_OPTIONS, strict=True, showCustomUi=True,
             )
             worksheet.add_validation(
-                "J2:J1000", ValidationConditionType.one_of_list,
+                "I2:I1000", ValidationConditionType.one_of_list,
                 _STAV_OPTIONS, strict=True, showCustomUi=True,
             )
         except Exception as e:  # noqa: BLE001
@@ -181,13 +181,10 @@ class SheetsClient:
         """Vycentrovať tabuľku + tučná zafixovaná hlavička. Best-effort."""
         try:
             worksheet.format(
-                f"A1:{_LAST_COL}1",
+                "A1:I1",
                 {"textFormat": {"bold": True}, "horizontalAlignment": "CENTER"},
             )
-            worksheet.format(
-                f"A2:{_LAST_COL}1000",
-                {"horizontalAlignment": "CENTER"},
-            )
+            worksheet.format("A2:I1000", {"horizontalAlignment": "CENTER"})
             worksheet.freeze(rows=1)
         except Exception as e:  # noqa: BLE001
             log.warning("sheets.formatting_failed", error=str(e))

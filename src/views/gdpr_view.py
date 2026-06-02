@@ -9,15 +9,13 @@ from __future__ import annotations
 import discord
 
 from src.modals.lead_modal import LeadModal
-from src.products import Product
 
 
 class GDPRConsentView(discord.ui.View):
-    """Ephemeral view pre potvrdenie GDPR súhlasu (pre konkrétny produkt)."""
+    """Ephemeral view pre potvrdenie GDPR súhlasu."""
 
-    def __init__(self, product: Product) -> None:
+    def __init__(self) -> None:
         super().__init__(timeout=120)  # 2 min na klik
-        self.product = product
 
     @discord.ui.button(
         label="Mám súhlas, pokračovať",
@@ -29,7 +27,8 @@ class GDPRConsentView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ) -> None:
-        await interaction.response.send_modal(LeadModal(self.product))
+        # Otvor modal s formulárom
+        await interaction.response.send_modal(LeadModal())
 
     @discord.ui.button(
         label="Zrušiť",
@@ -41,6 +40,6 @@ class GDPRConsentView(discord.ui.View):
         button: discord.ui.Button,
     ) -> None:
         await interaction.response.edit_message(
-            content="❌ Zrušené. Pre novú žiadosť použi príkaz znova.",
+            content="❌ Zrušené. Pre novú žiadosť použi `/leasing` znova.",
             view=None,
         )
