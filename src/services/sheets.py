@@ -50,6 +50,14 @@ _STAV_OPTIONS = ["Nový lead", "Kontaktovaný", "V procese", "Schválený", "Nes
 _TZ = ZoneInfo("Europe/Bratislava")
 
 
+def _sheet_safe(value: str) -> str:
+    """Bunky začínajúce na = + - @ Google Sheets berie ako vzorec (a padne na
+    #ERROR). Apostrof na začiatku vynúti text — Sheets ho nezobrazí."""
+    if value and value[0] in "=+-@":
+        return "'" + value
+    return value
+
+
 def _build_row(
     timestamp: str,
     client_name: str,
@@ -122,7 +130,8 @@ class SheetsClient:
 
     def _append_row_blocking(self, row: list[str]) -> None:
         ws = self._get_worksheet()
-        ws.append_row(row, value_input_option="USER_ENTERED")
+        safe_row = [_sheet_safe(c) for c in row]
+        ws.append_row(safe_row, value_input_option="USER_ENTERED")
 
     def _get_worksheet(self) -> Any:
         if self._worksheet is not None:
