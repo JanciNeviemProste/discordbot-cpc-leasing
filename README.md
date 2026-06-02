@@ -36,9 +36,11 @@ V Discorde: `/leasing` → potvrď GDPR → vyplň formulár → Kristián má T
    - Cena auta
    - Link na auto (URL inzerátu)
 4. Po odoslaní bot:
-   - pošle **Telegram správu Kristiánovi** (finančák) — kritická cesta
+   - pošle **Telegram správu Kristiánovi** (finančák) — kritická cesta, vrátane **linku na tabuľku**
    - zapíše **riadok do Google Sheetu** pre Petra (majiteľ) — evidencia, best-effort
 5. Flipper dostane ephemerálne `✅ Odoslané Kristiánovi`
+
+E-mail aj telefón sa **validujú vo formulári** — pri neplatnom sa lead neodošle (flipper dostane chybu a opraví).
 
 > Google Sheet je voliteľný: ak `GOOGLE_SHEET_ID` nie je nastavený, zápis sa preskočí a beží len Telegram.
 
@@ -81,7 +83,11 @@ Bot zapisuje každý lead ako nový riadok cez **service account** (žiadny OAut
 7. Vytvor (alebo otvor) cieľový Google Sheet → **Share** → vlož ten email → rola **Editor** → Send
 8. Z URL Sheetu skopíruj **Sheet ID** (časť medzi `/d/` a `/edit`) → `GOOGLE_SHEET_ID`
 
-Hlavičku (Dátum, Meno, Email, Telefón, Cena, Link, Flipper) zapíše bot sám pri prvom leade, ak je list prázdny.
+Stĺpce: **Dátum · Meno a priezvisko · Email · Telefón · Cena · Link na auto · Flipper · Typ produktu · Stav**. Hlavičku zapíše bot sám pri prvom leade. Posledné dva stĺpce majú **dropdown** (nastaví ho bot):
+- **Typ produktu** — Leasing / PZP / Kasko (pri novom leade prázdny, vyberie sa ručne)
+- **Stav** — Nový lead / Kontaktovaný / V procese / Schválený / Neschválený (default `Nový lead`)
+
+Kristián/Peter menia tieto dva stĺpce priamo v Sheete cez dropdown.
 
 ### 4. `.env`
 

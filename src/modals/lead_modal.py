@@ -66,43 +66,69 @@ class LeadModal(discord.ui.Modal, title="Žiadosť o leasing — drive.sk"):
         style=discord.TextStyle.short,
     )
 
+    def __init__(self, *, defaults: dict[str, str] | None = None) -> None:
+        super().__init__()
+        if defaults:
+            # Predvyplň polia pôvodnými hodnotami (po neúspešnej validácii),
+            # aby flipper nemusel prepisovať všetko odznova.
+            self.client_name.default = defaults.get("client_name") or None
+            self.client_email.default = defaults.get("client_email") or None
+            self.client_phone.default = defaults.get("client_phone") or None
+            self.price.default = defaults.get("price") or None
+            self.car_link.default = defaults.get("car_link") or None
+
     async def on_submit(self, interaction: discord.Interaction) -> None:
         """Handler — validuje a deleguje na pipeline v leads cog-u."""
         from src.cogs.leads import process_lead_submission
+        from src.views.lead_fix_view import LeadFixView
+
+        # Pôvodné hodnoty na predvyplnenie pri prípadnej oprave.
+        defaults = {
+            "client_name": self.client_name.value.strip(),
+            "client_email": self.client_email.value.strip(),
+            "client_phone": self.client_phone.value.strip(),
+            "price": self.price.value.strip(),
+            "car_link": self.car_link.value.strip(),
+        }
+
+        async def reject(message: str) -> None:
+            await interaction.response.send_message(
+                message, view=LeadFixView(defaults), ephemeral=True
+            )
 
         phone_raw = self.client_phone.value.strip()
         phone_normalized = normalize_phone(phone_raw)
         if not is_valid_phone(phone_normalized):
-            await interaction.response.send_message(
+            await reject(
                 f"❌ Neplatný telefón: `{phone_raw}`\n"
-                "Akceptovaný formát: `+421 905 123 456` alebo `0905 123 456`",
-                ephemeral=True,
+                "Akceptovaný formát: `+421 905 123 456` alebo `0905 123 456`\n"
+                "_Klikni „Opraviť údaje“ nižšie a doplň správne číslo._"
             )
             return
 
         email = self.client_email.value.strip().lower()
         if not is_valid_email(email):
-            await interaction.response.send_message(
-                f"❌ Neplatný email: `{email}`",
-                ephemeral=True,
+            await reject(
+                f"❌ Neplatný email: `{email}`\n"
+                "_Klikni „Opraviť údaje“ nižšie a oprav email._"
             )
             return
 
         price_raw = self.price.value.strip()
         if not looks_like_price(price_raw):
-            await interaction.response.send_message(
+            await reject(
                 f"❌ Neplatná cena: `{price_raw}`\n"
-                "Zadaj sumu, napr. `12 500 €` alebo `12500`.",
-                ephemeral=True,
+                "Zadaj sumu, napr. `12 500 €` alebo `12500`.\n"
+                "_Klikni „Opraviť údaje“ nižšie._"
             )
             return
 
         car_link_raw = self.car_link.value.strip()
         if not is_url(car_link_raw):
-            await interaction.response.send_message(
+            await reject(
                 f"❌ Neplatný link na auto: `{car_link_raw}`\n"
-                "Vlož celú URL inzerátu (začína `https://` alebo `www.`).",
-                ephemeral=True,
+                "Vlož celú URL inzerátu (začína `https://` alebo `www.`).\n"
+                "_Klikni „Opraviť údaje“ nižšie._"
             )
             return
 

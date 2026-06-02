@@ -56,6 +56,12 @@ class TelegramClient:
         flipper_name: str,
     ) -> TelegramResult:
         """Pošli formátovanú správu o novej žiadosti o leasing."""
+        sheet_id = self.settings.google_sheet_id
+        sheet_url = (
+            f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
+            if sheet_id
+            else None
+        )
         text = _format_message(
             client_name=client_name,
             client_phone=client_phone,
@@ -63,6 +69,7 @@ class TelegramClient:
             price=price,
             car_link=car_link,
             flipper_name=flipper_name,
+            sheet_url=sheet_url,
         )
         return await self._post(text)
 
@@ -134,11 +141,13 @@ def _format_message(
     price: str,
     car_link: str,
     flipper_name: str,
+    sheet_url: str | None = None,
 ) -> str:
     """Markdown správa pre Kristiána. Hviezdičky okolo nadpisu sú formátovanie,
-    ostatné texty sú escapnuté ako literal."""
+    ostatné texty sú escapnuté ako literal. Ak je sheet_url, pridá inline link
+    na tabuľku (URL Google Sheetu nemá `)` ani `\\`, takže netreba escapovať)."""
     e = _escape_markdown_v2
-    return (
+    msg = (
         "🚗 *Nová žiadosť o leasing — drive\\.sk*\n"
         "\n"
         f"👤 Klient: {e(client_name)}\n"
@@ -148,3 +157,6 @@ def _format_message(
         f"🔗 Auto: {e(car_link)}\n"
         f"👨‍💼 Flipper: {e(flipper_name)}"
     )
+    if sheet_url:
+        msg += f"\n\n[📊 Otvoriť tabuľku leadov]({sheet_url})"
+    return msg

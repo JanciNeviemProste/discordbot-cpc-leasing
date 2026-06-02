@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 
 import gspread
 from google.oauth2.service_account import Credentials
+from gspread.utils import ValidationConditionType
 
 from src.config import get_settings
 from src.utils.logger import get_logger
@@ -38,9 +39,39 @@ _HEADER = [
     "Cena",
     "Link na auto",
     "Flipper",
+    "Typ produktu",  # stĺpec H — dropdown, vyberá sa ručne v Sheete
+    "Stav",          # stĺpec I — dropdown, default "Nový lead"
 ]
 
+# Možnosti pre dropdowny v Sheete.
+_PRODUKT_OPTIONS = ["Leasing", "PZP", "Kasko"]
+_STAV_OPTIONS = ["Nový lead", "Kontaktovaný", "V procese", "Schválený", "Neschválený"]
+
 _TZ = ZoneInfo("Europe/Bratislava")
+
+
+def _build_row(
+    timestamp: str,
+    client_name: str,
+    client_email: str,
+    client_phone: str,
+    price: str,
+    car_link: str,
+    flipper_name: str,
+) -> list[str]:
+    """Zostav riadok v poradí podľa _HEADER. Typ produktu prázdny (vyberie sa
+    v Sheete), Stav predvyplnený na prvú možnosť ('Nový lead')."""
+    return [
+        timestamp,
+        client_name,
+        client_email,
+        client_phone,
+        price,
+        car_link,
+        flipper_name,
+        "",
+        _STAV_OPTIONS[0],
+    ]
 
 
 @dataclass
@@ -69,7 +100,7 @@ class SheetsClient:
     ) -> SheetsResult:
         """Pridaj lead ako nový riadok. Best-effort — chyba nezablokuje flow."""
         timestamp = datetime.now(_TZ).strftime("%Y-%m-%d %H:%M")
-        row = [
+        row = _build_row(
             timestamp,
             client_name,
             client_email,
@@ -77,7 +108,7 @@ class SheetsClient:
             price,
             car_link,
             flipper_name,
-        ]
+        )
         try:
             await asyncio.to_thread(self._append_row_blocking, row)
         except Exception as e:  # noqa: BLE001
@@ -105,11 +136,36 @@ class SheetsClient:
         spreadsheet = client.open_by_key(self.settings.google_sheet_id)
         worksheet = spreadsheet.sheet1
         self._ensure_header(worksheet)
+        self._ensure_dropdowns(worksheet)
         self._worksheet = worksheet
         return worksheet
 
     def _ensure_header(self, worksheet: Any) -> None:
-        """Ak je list prázdny, zapíš hlavičku. Existujúcu neprepisujeme."""
+        """Zaisti, že hlavička sedí s _HEADER.
+
+        - prázdny list → zapíš hlavičku
+        - staršia (kratšia) hlavička → rozšír na aktuálnu (napr. 7 → 9 stĺpcov)
+        - inak nechaj tak (neprepisujeme prípadné úpravy)
+        """
         first_row = worksheet.row_values(1)
         if not first_row:
             worksheet.append_row(_HEADER, value_input_option="USER_ENTERED")
+        elif len(first_row) < len(_HEADER):
+            worksheet.update(
+                [_HEADER], "A1", value_input_option="USER_ENTERED"
+            )
+
+    def _ensure_dropdowns(self, worksheet: Any) -> None:
+        """Nastav dropdown validáciu na stĺpce Typ produktu (H) a Stav (I).
+        Best-effort — zlyhanie nezablokuje zápis leadov."""
+        try:
+            worksheet.add_validation(
+                "H2:H1000", ValidationConditionType.one_of_list,
+                _PRODUKT_OPTIONS, strict=True, showCustomUi=True,
+            )
+            worksheet.add_validation(
+                "I2:I1000", ValidationConditionType.one_of_list,
+                _STAV_OPTIONS, strict=True, showCustomUi=True,
+            )
+        except Exception as e:  # noqa: BLE001
+            log.warning("sheets.validation_failed", error=str(e))
