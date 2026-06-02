@@ -45,7 +45,7 @@ class LeadModal(discord.ui.Modal, title="Žiadosť o leasing — drive.sk"):
 
     client_phone = discord.ui.TextInput(
         label="Telefón klienta",
-        placeholder="0948 000 000",
+        placeholder="+421 905 123 456",
         required=True,
         min_length=9,
         max_length=20,
