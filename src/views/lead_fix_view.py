@@ -9,13 +9,15 @@ from __future__ import annotations
 import discord
 
 from src.modals.lead_modal import LeadModal
+from src.products import Product
 
 
 class LeadFixView(discord.ui.View):
     """Tlačidlo na znovuotvorenie predvyplneného formulára po chybe validácie."""
 
-    def __init__(self, defaults: dict[str, str]) -> None:
+    def __init__(self, product: Product, defaults: dict[str, str]) -> None:
         super().__init__(timeout=300)  # 5 min na opravu
+        self.product = product
         self.defaults = defaults
 
     @discord.ui.button(
@@ -28,4 +30,6 @@ class LeadFixView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ) -> None:
-        await interaction.response.send_modal(LeadModal(defaults=self.defaults))
+        await interaction.response.send_modal(
+            LeadModal(self.product, defaults=self.defaults)
+        )

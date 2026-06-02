@@ -19,6 +19,7 @@ from typing import Any
 import httpx
 
 from src.config import get_settings
+from src.products import Product
 from src.utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -47,15 +48,15 @@ class TelegramClient:
 
     async def send_lead_notification(
         self,
+        product: Product,
         *,
         client_name: str,
         client_phone: str,
         client_email: str,
-        price: str,
-        car_link: str,
+        extras: dict[str, str],
         flipper_name: str,
     ) -> TelegramResult:
-        """Pošli formátovanú správu o novej žiadosti o leasing."""
+        """Pošli formátovanú správu o novej žiadosti (podľa typu produktu)."""
         sheet_id = self.settings.google_sheet_id
         sheet_url = (
             f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit"
@@ -63,11 +64,11 @@ class TelegramClient:
             else None
         )
         text = _format_message(
+            product=product,
             client_name=client_name,
             client_phone=client_phone,
             client_email=client_email,
-            price=price,
-            car_link=car_link,
+            extras=extras,
             flipper_name=flipper_name,
             sheet_url=sheet_url,
         )
@@ -135,28 +136,33 @@ def _escape_markdown_v2(text: str) -> str:
 
 def _format_message(
     *,
+    product: Product,
     client_name: str,
     client_phone: str,
     client_email: str,
-    price: str,
-    car_link: str,
+    extras: dict[str, str],
     flipper_name: str,
     sheet_url: str | None = None,
 ) -> str:
-    """Markdown správa pre Kristiána. Hviezdičky okolo nadpisu sú formátovanie,
-    ostatné texty sú escapnuté ako literal. Ak je sheet_url, pridá inline link
-    na tabuľku (URL Google Sheetu nemá `)` ani `\\`, takže netreba escapovať)."""
+    """Markdown správa pre Kristiána podľa typu produktu. Hviezdičky okolo
+    nadpisu sú formátovanie, ostatné texty escapnuté. Ak je sheet_url, pridá
+    inline link na tabuľku (URL Sheetu nemá `)` ani `\\`)."""
     e = _escape_markdown_v2
-    msg = (
-        "🚗 *Nová žiadosť o leasing — drive\\.sk*\n"
-        "\n"
-        f"👤 Klient: {e(client_name)}\n"
-        f"📞 Telefón: {e(client_phone)}\n"
-        f"✉️ Email: {e(client_email)}\n"
-        f"💰 Cena: {e(price)}\n"
-        f"🔗 Auto: {e(car_link)}\n"
-        f"👨‍💼 Flipper: {e(flipper_name)}"
-    )
+    lines = [
+        f"{product.emoji} *Nová žiadosť o {e(product.typ)} — drive\\.sk*",
+        "",
+        f"👤 Klient: {e(client_name)}",
+        f"📞 Telefón: {e(client_phone)}",
+        f"✉️ Email: {e(client_email)}",
+    ]
+    for ef in product.extras:
+        value = extras.get(ef.key, "").strip()
+        if not value and not ef.required:
+            continue  # prázdne voliteľné pole vynechaj
+        lines.append(f"• {e(ef.label)}: {e(value)}")
+    lines.append(f"👨‍💼 Flipper: {e(flipper_name)}")
+
+    msg = "\n".join(lines)
     if sheet_url:
         msg += f"\n\n[📊 Otvoriť tabuľku leadov]({sheet_url})"
     return msg

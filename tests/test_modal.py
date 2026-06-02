@@ -1,40 +1,43 @@
-"""Unit testy pre LeadModal — predvyplnenie polí pri oprave.
-
-discord.py Modal/View sa inštanciuje len v bežiacom event loope, preto async.
-"""
+"""Unit testy pre LeadModal — produktové polia + predvyplnenie (async, discord
+Modal sa inštanciuje len v bežiacom event loope)."""
 from __future__ import annotations
 
 import pytest
 
 from src.modals.lead_modal import LeadModal
+from src.products import PRODUCTS
 
 
 @pytest.mark.asyncio
-async def test_modal_prefill_sets_defaults() -> None:
-    d = {
-        "client_name": "Ján Novák",
-        "client_email": "jan@gmail.com",
-        "client_phone": "+421905123456",
-        "price": "12 500 €",
-        "car_link": "https://autobazar.eu/123",
-    }
-    m = LeadModal(defaults=d)
-    assert m.client_name.default == "Ján Novák"
-    assert m.client_email.default == "jan@gmail.com"
-    assert m.client_phone.default == "+421905123456"
-    assert m.price.default == "12 500 €"
-    assert m.car_link.default == "https://autobazar.eu/123"
+async def test_leasing_modal_has_five_fields() -> None:
+    m = LeadModal(PRODUCTS["leasing"])
+    assert len(m.children) == 5  # 3 fixné + 2 extra
+    assert set(m._inputs) == {"client_name", "client_email", "client_phone", "cena", "car_link"}
 
 
 @pytest.mark.asyncio
-async def test_modal_without_defaults_has_no_prefill() -> None:
-    m = LeadModal()
-    assert m.client_name.default is None
-    assert m.client_phone.default is None
+async def test_pzp_modal_fields() -> None:
+    m = LeadModal(PRODUCTS["pzp"])
+    assert set(m._inputs) == {"client_name", "client_email", "client_phone", "vozidlo", "ecv"}
 
 
 @pytest.mark.asyncio
-async def test_modal_empty_string_default_becomes_none() -> None:
-    m = LeadModal(defaults={"client_name": "", "client_phone": "+421905123456"})
-    assert m.client_name.default is None      # prázdne → None (žiadne predvyplnenie)
-    assert m.client_phone.default == "+421905123456"
+async def test_ine_modal_fields() -> None:
+    m = LeadModal(PRODUCTS["ine"])
+    assert set(m._inputs) == {"client_name", "client_email", "client_phone", "popis", "poznamka"}
+
+
+@pytest.mark.asyncio
+async def test_prefill_sets_defaults() -> None:
+    m = LeadModal(PRODUCTS["leasing"], defaults={
+        "client_name": "Ján Novák", "client_phone": "+421905123456", "cena": "12 500 €",
+    })
+    assert m._inputs["client_name"].default == "Ján Novák"
+    assert m._inputs["client_phone"].default == "+421905123456"
+    assert m._inputs["cena"].default == "12 500 €"
+
+
+@pytest.mark.asyncio
+async def test_empty_default_becomes_none() -> None:
+    m = LeadModal(PRODUCTS["leasing"], defaults={"client_name": ""})
+    assert m._inputs["client_name"].default is None

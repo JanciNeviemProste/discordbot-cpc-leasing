@@ -1,7 +1,7 @@
-"""Leads cog — minimal flow.
+"""Leads cog — 4 príkazy podľa typu produktu.
 
-Command:
-- /leasing → otvorí GDPR prompt → modal → pošle Telegram správu Kristiánovi
+/leasing /pzp /kasko /ine → GDPR prompt → modal (na mieru) → Telegram Kristiánovi
++ riadok do spoločného Google Sheetu.
 """
 from __future__ import annotations
 
@@ -10,11 +10,22 @@ from discord import app_commands
 from discord.ext import commands
 
 from src.config import get_settings
+from src.products import PRODUCTS, Product
 from src.services.telegram import TelegramClient
 from src.utils.logger import get_logger
 from src.views.gdpr_view import GDPRConsentView
 
 log = get_logger(__name__)
+
+_GDPR_TEXT = (
+    "📋 **GDPR potvrdenie**\n\n"
+    "Potvrdzujem, že:\n"
+    "• Mám od klienta výslovný súhlas na poskytnutie jeho údajov\n"
+    "• Klient bol informovaný, že údaje budú zdieľané s finančným "
+    "poradcom (Kristián Valovič) za účelom prípravy produktu\n"
+    "• Klient bol oboznámený so spracovaním osobných údajov firmou drive.sk\n\n"
+    "_Po potvrdení sa otvorí formulár._"
+)
 
 
 class LeadsCog(commands.Cog):
@@ -22,11 +33,8 @@ class LeadsCog(commands.Cog):
         self.bot = bot
         self.telegram = telegram
 
-    @app_commands.command(
-        name="leasing",
-        description="Vytvoriť žiadosť o leasing pre klienta",
-    )
-    async def leasing(self, interaction: discord.Interaction) -> None:
+    async def _start(self, interaction: discord.Interaction, product: Product) -> None:
+        """Spoločný štart: channel check + GDPR výzva pre daný produkt."""
         settings = get_settings()
         if (
             settings.discord_leasing_channel_id is not None
@@ -37,34 +45,40 @@ class LeadsCog(commands.Cog):
                 ephemeral=True,
             )
             return
-
-        gdpr_text = (
-            "📋 **GDPR potvrdenie**\n\n"
-            "Potvrdzujem, že:\n"
-            "• Mám od klienta výslovný súhlas na poskytnutie jeho údajov\n"
-            "• Klient bol informovaný, že údaje budú zdieľané s finančným "
-            "poradcom (Kristián Valovič) za účelom prípravy leasingu/poistky\n"
-            "• Klient bol oboznámený so spracovaním osobných údajov firmou drive.sk\n\n"
-            "_Po potvrdení sa otvorí formulár._"
-        )
         await interaction.response.send_message(
-            content=gdpr_text,
-            view=GDPRConsentView(),
+            content=_GDPR_TEXT,
+            view=GDPRConsentView(product),
             ephemeral=True,
         )
+
+    @app_commands.command(name="leasing", description="Žiadosť o leasing pre klienta")
+    async def leasing(self, interaction: discord.Interaction) -> None:
+        await self._start(interaction, PRODUCTS["leasing"])
+
+    @app_commands.command(name="pzp", description="Žiadosť o PZP (povinné zmluvné poistenie)")
+    async def pzp(self, interaction: discord.Interaction) -> None:
+        await self._start(interaction, PRODUCTS["pzp"])
+
+    @app_commands.command(name="kasko", description="Žiadosť o havarijné poistenie (Kasko)")
+    async def kasko(self, interaction: discord.Interaction) -> None:
+        await self._start(interaction, PRODUCTS["kasko"])
+
+    @app_commands.command(name="ine", description="Iná žiadosť / produkt")
+    async def ine(self, interaction: discord.Interaction) -> None:
+        await self._start(interaction, PRODUCTS["ine"])
 
 
 async def process_lead_submission(
     *,
     interaction: discord.Interaction,
+    product: Product,
     client_name: str,
-    client_phone: str,
     client_email: str,
-    price: str,
-    car_link: str,
+    client_phone: str,
+    extras: dict[str, str],
 ) -> None:
-    """Volane z LeadModal.on_submit. Pošle Telegram správu Kristiánovi (kritická
-    cesta) a zapíše lead do Google Sheetu pre Petra (best-effort). Žiadna DB."""
+    """Volane z LeadModal.on_submit. Telegram Kristiánovi (kritická cesta) +
+    zápis do spoločného Google Sheetu (best-effort)."""
     bot = interaction.client
     telegram: TelegramClient = bot.telegram_client  # type: ignore[attr-defined]
     sheets = getattr(bot, "sheets_client", None)
@@ -72,29 +86,29 @@ async def process_lead_submission(
 
     log.info(
         "leads.submission",
+        typ=product.typ,
         flipper_id=str(interaction.user.id),
         flipper_name=flipper_name,
         client_email_domain=client_email.split("@", 1)[-1] if "@" in client_email else "?",
     )
 
     tg_result = await telegram.send_lead_notification(
+        product,
         client_name=client_name,
         client_phone=client_phone,
         client_email=client_email,
-        price=price,
-        car_link=car_link,
+        extras=extras,
         flipper_name=flipper_name,
     )
 
-    # Evidencia pre Petra — best-effort, nezablokuje potvrdenie flipperovi.
     sheet_ok = True
     if sheets is not None:
         sheet_result = await sheets.append_lead(
+            product,
             client_name=client_name,
             client_email=client_email,
             client_phone=client_phone,
-            price=price,
-            car_link=car_link,
+            extras=extras,
             flipper_name=flipper_name,
         )
         sheet_ok = sheet_result.success
