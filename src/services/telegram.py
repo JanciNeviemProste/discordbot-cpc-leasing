@@ -73,17 +73,22 @@ class TelegramClient:
         )
         return await self._post(text)
 
-    async def _post(self, text: str) -> TelegramResult:
+    async def send_message(self, text: str) -> TelegramResult:
+        """Pošli ľubovoľný plain-text (napr. mesačný report) — bez MarkdownV2."""
+        return await self._post(text, parse_mode=None)
+
+    async def _post(self, text: str, parse_mode: str | None = "MarkdownV2") -> TelegramResult:
         url = (
             f"https://api.telegram.org/bot{self.settings.telegram_bot_token}"
             f"/sendMessage"
         )
-        payload = {
+        payload: dict[str, Any] = {
             "chat_id": self.settings.telegram_chat_id,
             "text": text,
-            "parse_mode": "MarkdownV2",
             "disable_web_page_preview": False,
         }
+        if parse_mode is not None:
+            payload["parse_mode"] = parse_mode
 
         try:
             resp = await self._client.post(url, json=payload)

@@ -50,6 +50,7 @@ class SynapseDriveBot(commands.Bot):
 
         # Cogs
         await self.load_extension("src.cogs.leads")
+        await self.load_extension("src.cogs.monthly_report")
 
         # Sync slash commands na guild (rýchle, na rozdiel od global)
         guild = discord.Object(id=self.settings.discord_guild_id)

@@ -46,6 +46,7 @@ _HEADER = [
 # Možnosti pre dropdowny v Sheete.
 _PRODUKT_OPTIONS = ["Leasing", "PZP", "Kasko"]
 _STAV_OPTIONS = ["Nový lead", "Kontaktovaný", "V procese", "Schválený", "Neschválený"]
+STAV_OPTIONS = _STAV_OPTIONS  # verejný alias (reports / monthly_report cog)
 
 _TZ = ZoneInfo("Europe/Bratislava")
 
@@ -125,6 +126,15 @@ class SheetsClient:
 
         log.info("sheets.appended")
         return SheetsResult(success=True)
+
+    async def read_data_rows(self) -> list[list[str]]:
+        """Vráť všetky dátové riadky (bez hlavičky) pre mesačnú štatistiku."""
+        values = await asyncio.to_thread(self._all_values_blocking)
+        return values[1:]  # vynechaj hlavičku
+
+    def _all_values_blocking(self) -> list[list[str]]:
+        ws = self._get_worksheet()
+        return ws.get_all_values()
 
     # ---- blocking interné (bežia v thread executore) ----
 

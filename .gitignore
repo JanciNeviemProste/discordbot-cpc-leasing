@@ -54,3 +54,6 @@ htmlcov/
 *.sqlite
 *.db
 secrets/
+
+# Runtime state (mesačný report)
+report_state.json
