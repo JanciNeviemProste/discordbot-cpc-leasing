@@ -51,8 +51,7 @@ class LeadsCog(commands.Cog):
         správa potom ostane v kanáli a tlačidlo funguje aj po reštarte bota."""
         panel_text = (
             "🚗 **Žiadosť o leasing — drive.sk**\n\n"
-            "Klikni na tlačidlo nižšie a vyplň údaje klienta. "
-            "Netreba písať žiadny príkaz."
+            "Klikni na tlačidlo nižšie a vyplň údaje klienta."
         )
         await interaction.channel.send(content=panel_text, view=LeadPanelView())
         await interaction.response.send_message(
