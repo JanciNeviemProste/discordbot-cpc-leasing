@@ -124,23 +124,24 @@ async def process_lead_submission(
     if not tg_result.success:
         log.error("leads.telegram_failed", error=tg_result.error)
         await interaction.followup.send(
-            f"⚠️ **Telegram zlyhal:** `{tg_result.error}`\n"
-            "Údaje klienta sa Kristiánovi neodoslali — daj vedieť adminovi.",
+            f"⚠️ **Odoslanie zlyhalo:** `{tg_result.error}`\n"
+            "Kontakt sa finančnému poradcovi nedoručil — skús to znova alebo daj vedieť adminovi.",
             ephemeral=True,
         )
         return
 
     if not sheet_ok:
         await interaction.followup.send(
-            "✅ **Odoslané Kristiánovi.**\n"
-            "⚠️ Zápis do evidencie (Google Sheet) zlyhal — Kristián lead má, "
+            "✅ **Hotovo, kontakt je odoslaný!** Finančný poradca sa ozve klientovi.\n"
+            "⚠️ Zápis do evidencie (Google Sheet) zlyhal — kontakt je doručený, "
             "ale do tabuľky sa nezapísal. Daj vedieť adminovi.",
             ephemeral=True,
         )
         return
 
     await interaction.followup.send(
-        "✅ **Odoslané Kristiánovi.** Vďaka!",
+        "✅ **Hotovo, kontakt je odoslaný!**\n\n"
+        "Náš finančný poradca sa čoskoro ozve klientovi a dohodne ďalší postup. Ďakujeme!",
         ephemeral=True,
     )
 
