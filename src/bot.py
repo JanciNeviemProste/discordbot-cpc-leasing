@@ -14,6 +14,7 @@ from src.config import get_settings
 from src.services.sheets import SheetsClient
 from src.services.telegram import TelegramClient
 from src.utils.logger import get_logger, setup_logging
+from src.views.lead_panel_view import LeadPanelView
 
 
 class SynapseDriveBot(commands.Bot):
@@ -47,6 +48,10 @@ class SynapseDriveBot(commands.Bot):
             self.log.info("bot.sheets_enabled")
         else:
             self.log.info("bot.sheets_disabled", reason="GOOGLE_SHEET_ID prázdne")
+
+        # Persistentný tlačidlový panel — znova zaregistruj view podľa custom_id,
+        # aby staré tlačidlo v kanáli fungovalo aj po reštarte bota.
+        self.add_view(LeadPanelView())
 
         # Cogs
         await self.load_extension("src.cogs.leads")

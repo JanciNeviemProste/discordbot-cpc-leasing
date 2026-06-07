@@ -10,6 +10,28 @@ import discord
 
 from src.modals.lead_modal import LeadModal
 
+# Text GDPR výzvy — zdieľaný medzi /leasing príkazom a tlačidlovým panelom,
+# aby bola výzva všade rovnaká.
+GDPR_PROMPT = (
+    "📋 **GDPR potvrdenie**\n\n"
+    "Potvrdzujem, že:\n"
+    "• Mám od klienta výslovný súhlas na poskytnutie jeho údajov\n"
+    "• Klient bol informovaný, že údaje budú zdieľané s finančným "
+    "poradcom (Kristián Valovič) za účelom prípravy leasingu/poistky\n"
+    "• Klient bol oboznámený so spracovaním osobných údajov firmou drive.sk\n\n"
+    "_Po potvrdení sa otvorí formulár._"
+)
+
+
+async def send_consent_prompt(interaction: discord.Interaction) -> None:
+    """Pošle efemérnu GDPR výzvu + tlačidlo na potvrdenie. Spoločná cesta pre
+    `/leasing` aj pre klik na tlačidlový panel — odtiaľ sa otvorí modal."""
+    await interaction.response.send_message(
+        content=GDPR_PROMPT,
+        view=GDPRConsentView(),
+        ephemeral=True,
+    )
+
 
 class GDPRConsentView(discord.ui.View):
     """Ephemeral view pre potvrdenie GDPR súhlasu."""

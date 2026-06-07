@@ -12,7 +12,8 @@ from discord.ext import commands
 from src.config import get_settings
 from src.services.telegram import TelegramClient
 from src.utils.logger import get_logger
-from src.views.gdpr_view import GDPRConsentView
+from src.views.gdpr_view import send_consent_prompt
+from src.views.lead_panel_view import LeadPanelView
 
 log = get_logger(__name__)
 
@@ -38,20 +39,40 @@ class LeadsCog(commands.Cog):
             )
             return
 
-        gdpr_text = (
-            "📋 **GDPR potvrdenie**\n\n"
-            "Potvrdzujem, že:\n"
-            "• Mám od klienta výslovný súhlas na poskytnutie jeho údajov\n"
-            "• Klient bol informovaný, že údaje budú zdieľané s finančným "
-            "poradcom (Kristián Valovič) za účelom prípravy leasingu/poistky\n"
-            "• Klient bol oboznámený so spracovaním osobných údajov firmou drive.sk\n\n"
-            "_Po potvrdení sa otvorí formulár._"
+        await send_consent_prompt(interaction)
+
+    @app_commands.command(
+        name="leasing-panel",
+        description="Vyvesí trvalé tlačidlo na žiadosť o leasing do tohto kanála",
+    )
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def leasing_panel(self, interaction: discord.Interaction) -> None:
+        """Admin: pošle do aktuálneho kanála trvalú správu s tlačidlom. Spustiť raz —
+        správa potom ostane v kanáli a tlačidlo funguje aj po reštarte bota."""
+        panel_text = (
+            "🚗 **Žiadosť o leasing — drive.sk**\n\n"
+            "Klikni na tlačidlo nižšie a vyplň údaje klienta. "
+            "Netreba písať žiadny príkaz."
         )
+        await interaction.channel.send(content=panel_text, view=LeadPanelView())
         await interaction.response.send_message(
-            content=gdpr_text,
-            view=GDPRConsentView(),
+            "✅ Panel vyvesený v tomto kanáli.",
             ephemeral=True,
         )
+
+    @leasing_panel.error
+    async def leasing_panel_error(
+        self,
+        interaction: discord.Interaction,
+        error: app_commands.AppCommandError,
+    ) -> None:
+        if isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message(
+                "Tento príkaz môže použiť len správca servera.",
+                ephemeral=True,
+            )
+            return
+        raise error
 
 
 async def process_lead_submission(
