@@ -65,9 +65,22 @@ class LeadsCog(commands.Cog):
             "• **🧮 Spočítať orientačnú splátku** — rýchly odhad mesačnej splátky "
             "(stačí cena a počet mesiacov)."
         )
-        await interaction.channel.send(content=panel_text, view=LeadPanelView())
+        panel_msg = await interaction.channel.send(
+            content=panel_text, view=LeadPanelView()
+        )
+        try:
+            await panel_msg.pin()
+        except discord.Forbidden:
+            # Bot nemá v kanáli právo „Manage Messages" — panel je vyvesený, len nepripnutý.
+            await interaction.response.send_message(
+                "✅ Panel vyvesený, ale **nemám právo ho pripnúť** (chýba „Manage Messages“).\n"
+                "Pridaj botovi v kanáli toto právo a spusti `/leasing-panel` znova, "
+                "alebo pripni správu ručne.",
+                ephemeral=True,
+            )
+            return
         await interaction.response.send_message(
-            "✅ Panel vyvesený v tomto kanáli.",
+            "✅ Panel vyvesený a pripnutý v tomto kanáli.",
             ephemeral=True,
         )
 
