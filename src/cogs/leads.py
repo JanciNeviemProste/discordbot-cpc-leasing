@@ -12,6 +12,7 @@ from discord.ext import commands
 from src.config import get_settings
 from src.services.telegram import TelegramClient
 from src.utils.logger import get_logger
+from src.modals.splatka_modal import SplatkaModal
 from src.views.gdpr_view import send_consent_prompt
 from src.views.lead_panel_view import LeadPanelView
 
@@ -42,6 +43,15 @@ class LeadsCog(commands.Cog):
         await send_consent_prompt(interaction)
 
     @app_commands.command(
+        name="splatka",
+        description="Orientačná mesačná splátka úveru cez Cofidis (cena + doba)",
+    )
+    async def splatka(self, interaction: discord.Interaction) -> None:
+        """Samostatná kalkulačka — otvorí modal s cenou a počtom mesiacov.
+        Bez obmedzenia na kanál: je to neškodná pomôcka bez osobných údajov."""
+        await interaction.response.send_modal(SplatkaModal())
+
+    @app_commands.command(
         name="leasing-panel",
         description="Vyvesí trvalé tlačidlo na žiadosť o leasing do tohto kanála",
     )
@@ -51,7 +61,9 @@ class LeadsCog(commands.Cog):
         správa potom ostane v kanáli a tlačidlo funguje aj po reštarte bota."""
         panel_text = (
             "🚗 **Žiadosť o leasing — drive.sk**\n\n"
-            "Klikni na tlačidlo nižšie a vyplň údaje klienta."
+            "• **📝 Mám záujem o leasing** — vyplň údaje klienta a pošli žiadosť.\n"
+            "• **🧮 Spočítať orientačnú splátku** — rýchly odhad mesačnej splátky "
+            "(stačí cena a počet mesiacov)."
         )
         await interaction.channel.send(content=panel_text, view=LeadPanelView())
         await interaction.response.send_message(

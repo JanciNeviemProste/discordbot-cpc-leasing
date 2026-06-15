@@ -57,3 +57,8 @@ secrets/
 
 # Runtime state (mesačný report)
 report_state.json
+
+# Cofidis dôverné podklady (interný cenník/sadzby + copyright logo) — nikdy do gitu
+Calculator_COFIDIS_2026.xlsx
+Ecommerce - Car financing_2026.pdf
+Cofidis-Logo25-Claim-FullColor-Red-01.jpg
