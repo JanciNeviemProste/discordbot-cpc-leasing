@@ -15,28 +15,29 @@ from src.services.cofidis_calc import (
 
 
 def test_matches_excel_example() -> None:
-    # Autoritatívna kontrola: príklad z Calculator_COFIDIS_2026.xlsx.
-    # cena 10000, akontácia 1000, 96 mes., poistenie Basic → 137,49 €/mes.
-    r = compute_installment(10000, 96, deposit=1000, year=2026, insurance="Basic")
+    # Autoritatívna kontrola vzorca: príklad z Calculator_COFIDIS_2026.xlsx.
+    # cena 10000, akontácia 1000, 96 mes., sadzba 7,35 %, poistenie Basic → 137,49 €/mes.
+    r = compute_installment(10000, 96, deposit=1000, rate=0.0735, insurance="Basic")
     assert r.monthly == 137.49
     assert r.loan_amount == 9000
     assert r.fee_eur == 180.0
     assert r.base_rate == 0.0735
 
 
-def test_default_path_no_deposit_no_insurance() -> None:
-    # Hlavná cesta kalkulačky: len cena + mesiace (akontácia 0, bez poistenia).
-    r = compute_installment(10000, 96)
-    assert r.loan_amount == 10000.0
-    assert r.fee_eur == 200.0
-    assert r.base_rate == 0.0735
-    assert r.monthly == 147.08
+def test_default_path_fixed_rate() -> None:
+    # Hlavná cesta kalkulačky: cena + vlastné zdroje (10 %) + mesiace,
+    # fixná sadzba 8,85 %, bez poistenia.
+    r = compute_installment(10000, 96, deposit=1000)
+    assert r.loan_amount == 9000.0
+    assert r.fee_eur == 180.0
+    assert r.base_rate == 0.0885
+    assert r.monthly == 140.32
 
 
 def test_default_path_shorter_term() -> None:
-    r = compute_installment(12500, 72)
-    assert r.base_rate == 0.0725
-    assert r.monthly == 226.68
+    r = compute_installment(12500, 72, deposit=1250)
+    assert r.base_rate == 0.0885
+    assert r.monthly == 214.06
 
 
 @pytest.mark.parametrize(
@@ -104,8 +105,9 @@ def test_parse_months_zero_then_compute_rejects() -> None:
 
 
 def test_min_loan_raises() -> None:
+    # Akontácia 80 € = 10 % z 800 € (prejde cez 10 % pravidlo), ale úver 720 € < 1000 €.
     with pytest.raises(CalcError):
-        compute_installment(800, 48)
+        compute_installment(800, 48, deposit=80)
 
 
 def test_deposit_too_high_raises() -> None:
@@ -113,10 +115,23 @@ def test_deposit_too_high_raises() -> None:
         compute_installment(10000, 48, deposit=10000)
 
 
-def test_long_term_old_car_not_available() -> None:
-    # 84–96 mes. pre auto z 2014 nie je v tabuľke povolené.
+def test_deposit_below_10pct_raises() -> None:
+    # 999 € < 10 % z 10000 € (1000 €) → chyba.
     with pytest.raises(CalcError):
-        compute_installment(10000, 96, year=2014)
+        compute_installment(10000, 48, deposit=999)
+
+
+def test_deposit_exactly_10pct_ok() -> None:
+    # Presne 10 % prejde a použije sa fixná sadzba 8,85 %.
+    r = compute_installment(10000, 48, deposit=1000)
+    assert r.loan_amount == 9000.0
+    assert r.base_rate == 0.0885
+
+
+def test_long_term_old_car_not_available() -> None:
+    # 84–96 mes. pre auto z 2014 nie je v tabuľke povolené (sadzba = None).
+    with pytest.raises(CalcError):
+        base_rate(96, 2014)
 
 
 def test_format_eur() -> None:

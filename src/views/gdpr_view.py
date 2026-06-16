@@ -17,7 +17,7 @@ GDPR_PROMPT = (
     "Potvrdzujem, že:\n"
     "• Mám od klienta výslovný súhlas na poskytnutie jeho údajov\n"
     "• Klient bol informovaný, že údaje budú zdieľané s finančným "
-    "poradcom (Kristián Valovič) za účelom prípravy leasingu/poistky\n"
+    "sprostredkovateľom (Kristián Valovič) za účelom prípravy leasingu/poistky\n"
     "• Klient bol oboznámený so spracovaním osobných údajov firmou drive.sk\n\n"
     "_Po potvrdení sa otvorí formulár._"
 )

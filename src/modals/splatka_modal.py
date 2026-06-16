@@ -1,10 +1,11 @@
 """Modal kalkulačky — orientačná mesačná splátka úveru cez Cofidis.
 
-Samostatná pomôcka (bez GDPR a bez osobných údajov): flipper zadá len cenu auta
-a počet mesiacov, bot vráti ephemerálny odhad mesačnej splátky.
+Samostatná pomôcka (bez GDPR a bez osobných údajov): flipper zadá cenu auta,
+vlastné zdroje (akontáciu) a počet mesiacov, bot vráti ephemerálny odhad mesačnej
+splátky.
 
-Predpoklady (podľa zadania): akontácia 0 €, bez poistenia, sadzba pre najnovšie
-auto (2026). Výpočet je v `src/services/cofidis_calc.py`.
+Predpoklady (podľa zadania): vlastné zdroje aspoň 10 % z ceny, bez poistenia,
+fixná orientačná sadzba 8,85 %. Výpočet je v `src/services/cofidis_calc.py`.
 """
 from __future__ import annotations
 
@@ -14,7 +15,6 @@ from src.services.cofidis_calc import (
     CalcError,
     compute_installment,
     format_eur,
-    format_pct,
     parse_amount,
     parse_months,
 )
@@ -23,17 +23,26 @@ from src.utils.logger import get_logger
 log = get_logger(__name__)
 
 _DISCLAIMER = (
-    "_Orientačné: akontácia 0 €, bez poistenia. Kalkulačka má len informatívny "
-    "charakter — záväznú ponuku pripraví finančný poradca._"
+    "_Orientačné: počítame s fixnou sadzbou 8,85 % a bez poistenia. "
+    "Úroková sadzba závisí od veku vozidla — záväznú ponuku pripraví "
+    "finančný sprostredkovateľ._"
 )
 
 
 class SplatkaModal(discord.ui.Modal, title="Orientačná mesačná splátka"):
-    """Dve polia: cena vozidla + počet mesiacov."""
+    """Tri polia: cena vozidla + vlastné zdroje + počet mesiacov."""
 
     cena = discord.ui.TextInput(
         label="Cena vozidla (€)",
         placeholder="napr. 12 500",
+        required=True,
+        max_length=20,
+        style=discord.TextStyle.short,
+    )
+
+    vlastne_zdroje = discord.ui.TextInput(
+        label="Výška vlastných zdrojov (€, min. 10 %)",
+        placeholder="napr. 1 500",
         required=True,
         max_length=20,
         style=discord.TextStyle.short,
@@ -50,8 +59,9 @@ class SplatkaModal(discord.ui.Modal, title="Orientačná mesačná splátka"):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         try:
             price = parse_amount(self.cena.value)
+            deposit = parse_amount(self.vlastne_zdroje.value)
             months = parse_months(self.pocet_mesiacov.value)
-            result = compute_installment(price, months)
+            result = compute_installment(price, months, deposit=deposit)
         except CalcError as e:
             await interaction.response.send_message(
                 f"❌ {e}\n"
@@ -66,9 +76,9 @@ class SplatkaModal(discord.ui.Modal, title="Orientačná mesačná splátka"):
         message = (
             "🚗 **Orientačná mesačná splátka**\n\n"
             f"Cena vozidla:  **{format_eur(price)}**\n"
+            f"Vlastné zdroje:  {format_eur(deposit)}\n"
             f"Počet mesiacov:  **{result.months}**\n"
             f"Výška úveru:  {format_eur(result.loan_amount)}\n"
-            f"Úroková sadzba:  {format_pct(result.base_rate)}\n"
             "━━━━━━━━━━━━━━━━━━━━\n"
             f"➡️  **~ {format_eur(result.monthly)} / mes**\n\n"
             f"{_DISCLAIMER}"

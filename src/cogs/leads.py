@@ -44,7 +44,7 @@ class LeadsCog(commands.Cog):
 
     @app_commands.command(
         name="splatka",
-        description="Orientačná mesačná splátka úveru cez Cofidis (cena + doba)",
+        description="Orientačná mesačná splátka cez Cofidis (cena + vlastné zdroje + doba)",
     )
     async def splatka(self, interaction: discord.Interaction) -> None:
         """Samostatná kalkulačka — otvorí modal s cenou a počtom mesiacov.
@@ -63,7 +63,7 @@ class LeadsCog(commands.Cog):
             "🚗 **Žiadosť o leasing — drive.sk**\n\n"
             "• **📝 Mám záujem o leasing** — vyplň údaje klienta a pošli žiadosť.\n"
             "• **🧮 Spočítať orientačnú splátku** — rýchly odhad mesačnej splátky "
-            "(stačí cena a počet mesiacov)."
+            "(cena, vlastné zdroje a počet mesiacov)."
         )
         panel_msg = await interaction.channel.send(
             content=panel_text, view=LeadPanelView()
@@ -150,14 +150,14 @@ async def process_lead_submission(
         log.error("leads.telegram_failed", error=tg_result.error)
         await interaction.followup.send(
             f"⚠️ **Odoslanie zlyhalo:** `{tg_result.error}`\n"
-            "Kontakt sa finančnému poradcovi nedoručil — skús to znova alebo daj vedieť adminovi.",
+            "Kontakt sa finančnému sprostredkovateľovi nedoručil — skús to znova alebo daj vedieť adminovi.",
             ephemeral=True,
         )
         return
 
     if not sheet_ok:
         await interaction.followup.send(
-            "✅ **Hotovo, kontakt je odoslaný!** Finančný poradca sa ozve klientovi.\n"
+            "✅ **Hotovo, kontakt je odoslaný!** Finančný sprostredkovateľ sa ozve klientovi.\n"
             "⚠️ Zápis do evidencie (Google Sheet) zlyhal — kontakt je doručený, "
             "ale do tabuľky sa nezapísal. Daj vedieť adminovi.",
             ephemeral=True,
@@ -166,7 +166,7 @@ async def process_lead_submission(
 
     await interaction.followup.send(
         "✅ **Hotovo, kontakt je odoslaný!**\n\n"
-        "Náš finančný poradca sa čoskoro ozve klientovi a dohodne ďalší postup. Ďakujeme!",
+        "Náš finančný sprostredkovateľ sa čoskoro ozve klientovi a dohodne ďalší postup. Ďakujeme!",
         ephemeral=True,
     )
 

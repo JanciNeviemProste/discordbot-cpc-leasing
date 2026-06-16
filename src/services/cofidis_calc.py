@@ -19,6 +19,8 @@ FEE_PCT = 0.02       # spracovateľský poplatok = 2 % z výšky úveru
 MIN_LOAN = 1000.0    # min. výška úveru
 MIN_MONTHS = 12
 MAX_MONTHS = 96
+FIXED_RATE = 0.0885       # fixná orientačná úroková sadzba (8,85 %)
+MIN_DEPOSIT_PCT = 0.10    # min. vlastné zdroje = 10 % z ceny vozidla
 
 # Roky výroby (stĺpce tabuľky sadzieb „2026 CFS", R17:AE17).
 YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013]
@@ -97,11 +99,11 @@ def compute_installment(
     months: int,
     *,
     deposit: float = 0.0,
-    year: int = 2026,
+    rate: float = FIXED_RATE,
     insurance: str = "Bez",
 ) -> Installment:
-    """Orientačná mesačná splátka. Predvolene: akontácia 0 €, bez poistenia,
-    sadzba pre najnovšie auto (2026)."""
+    """Orientačná mesačná splátka. Predvolene: fixná sadzba 8,85 %, bez poistenia.
+    Vyžaduje vlastné zdroje (akontáciu) aspoň 10 % z ceny vozidla."""
     if months < MIN_MONTHS or months > MAX_MONTHS:
         raise CalcError(
             f"Počet mesiacov musí byť {MIN_MONTHS}–{MAX_MONTHS} (zadané: {months})."
@@ -109,13 +111,20 @@ def compute_installment(
     if price <= 0:
         raise CalcError("Cena vozidla musí byť kladné číslo.")
     if deposit < 0 or deposit >= price:
-        raise CalcError("Akontácia musí byť medzi 0 € a cenou vozidla.")
+        raise CalcError("Vlastné zdroje musia byť medzi 0 € a cenou vozidla.")
+
+    min_deposit = _round2(price * MIN_DEPOSIT_PCT)
+    if deposit < min_deposit:
+        raise CalcError(
+            f"Pri tomto leasingu potrebuješ aspoň 10 % vlastných zdrojov — pri cene "
+            f"{format_eur(price)} je to minimálne {format_eur(min_deposit)} "
+            f"(zadané: {format_eur(deposit)})."
+        )
 
     financed = price - deposit
     if financed < MIN_LOAN:
         raise CalcError(f"Výška úveru musí byť aspoň {int(MIN_LOAN)} €.")
 
-    rate = base_rate(months, year)
     fee_eur = _round2(financed * FEE_PCT)
     principal = financed + COMMISSION       # provízia zarátaná do istiny
     r = rate / 12
